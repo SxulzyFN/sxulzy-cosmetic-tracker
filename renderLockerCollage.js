@@ -20,15 +20,6 @@ const RARITY_BG = {
   gaminglegends: { r: 120, g: 85, b: 255, alpha: 1 },
 };
 
-function esc(s) {
-  return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
 async function fetchBuffer(url) {
   const res = await axios.get(url, {
     responseType: "arraybuffer",
@@ -107,12 +98,34 @@ function chooseColumnCount(itemCount) {
   return Math.max(8, Math.min(14, itemCount || 8));
 }
 
+function svgText(text, width, height, fontSize, weight = 700, align = "left") {
+  const safe = String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  const anchor = align === "center" ? "middle" : "start";
+  const x = align === "center" ? Math.floor(width / 2) : 0;
+
+  return Buffer.from(`
+    <svg width="${width}" height="${height}">
+      <style>
+        text {
+          fill: #ffffff;
+          font-size: ${fontSize}px;
+          font-family: sans-serif;
+          font-weight: ${weight};
+        }
+      </style>
+      <text x="${x}" y="${Math.floor(height * 0.78)}" text-anchor="${anchor}">${safe}</text>
+    </svg>
+  `);
+}
+
 async function renderLockerCollage({ username, categoryTitle, title, items }) {
   const resolvedTitle = String(categoryTitle || title || "Locker");
   const resolvedUsername = String(username || "Unknown");
   const safe = (items || []).filter((i) => i && i.iconUrl).slice(0, 1500);
-
-  const FONT_STACK = "'DejaVu Sans','Liberation Sans',sans-serif";
 
   const ICON = 92;
   const TEXT_H = 24;
@@ -160,22 +173,14 @@ async function renderLockerCollage({ username, categoryTitle, title, items }) {
     </svg>
   `);
 
-  const textSvg = Buffer.from(`
-    <svg width="${width}" height="${height}">
-      <style>
-        .title { fill:#ffffff; font-size:32px; font-family:${FONT_STACK}; font-weight:800; }
-        .meta  { fill:#ffffff; font-size:22px; font-family:${FONT_STACK}; font-weight:700; }
-        .sub   { fill:#ffffff; font-size:20px; font-family:${FONT_STACK}; font-weight:700; }
-      </style>
+  img = img.composite([{ input: cardSvg, left: 0, top: 0 }]);
 
-      <text x="${OUTER_PAD + 38}" y="${OUTER_PAD + 56}" class="title">${esc(resolvedTitle)} (${safe.length})</text>
-      <text x="${OUTER_PAD + 38}" y="${height - OUTER_PAD - 28}" class="sub">Submitted by ${esc(resolvedUsername)}</text>
-    </svg>
-  `);
+  const titleBuf = svgText(`${resolvedTitle} (${safe.length})`, cardW - 60, 44, 32, 800, "left");
+  const submittedBuf = svgText(`Submitted by ${resolvedUsername}`, cardW - 60, 30, 20, 700, "left");
 
   img = img.composite([
-    { input: cardSvg, left: 0, top: 0 },
-    { input: textSvg, left: 0, top: 0 },
+    { input: titleBuf, left: OUTER_PAD + 38, top: OUTER_PAD + 18 },
+    { input: submittedBuf, left: OUTER_PAD + 38, top: height - OUTER_PAD - 42 },
   ]);
 
   const iconBuffers = await Promise.all(
@@ -240,17 +245,11 @@ async function renderLockerCollage({ username, categoryTitle, title, items }) {
 
     const [l1, l2] = wrapTwoLines(safe[i].name, 14);
 
-    const labelSvg = Buffer.from(`
-      <svg width="${TILE_W}" height="${TEXT_H}">
-        <style>
-          .t { fill:#ffffff; font-size:10.5px; font-family:${FONT_STACK}; font-weight:800; }
-        </style>
-        <text x="${Math.floor(TILE_W / 2)}" y="11" text-anchor="middle" class="t">${esc(l1)}</text>
-        <text x="${Math.floor(TILE_W / 2)}" y="22" text-anchor="middle" class="t">${esc(l2)}</text>
-      </svg>
-    `);
+    const line1 = svgText(l1, TILE_W, 12, 10.5, 800, "center");
+    const line2 = svgText(l2, TILE_W, 12, 10.5, 800, "center");
 
-    composites.push({ input: labelSvg, left, top: top + ICON });
+    composites.push({ input: line1, left, top: top + ICON + 1 });
+    composites.push({ input: line2, left, top: top + ICON + 12 });
   }
 
   img = img.composite(composites);
