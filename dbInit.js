@@ -1,3 +1,4 @@
+// dbInit.js
 const pool = require("./database");
 
 async function initDatabase() {
@@ -9,6 +10,14 @@ async function initDatabase() {
       refresh_token TEXT NOT NULL,
       expires_in INTEGER,
       created_at BIGINT NOT NULL
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS locker_snapshots (
+      discord_user_id TEXT PRIMARY KEY,
+      snapshot_json JSONB NOT NULL,
+      updated_at BIGINT NOT NULL
     );
   `);
 

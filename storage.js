@@ -1,27 +1,5 @@
 // storage.js
-
-const fs = require("fs");
-const path = require("path");
 const pool = require("./database");
-
-const LOCKER_SNAPSHOTS_FILE = path.join(__dirname, "lockerSnapshots.json");
-
-function readJson(file, fallback = {}) {
-  try {
-    if (!fs.existsSync(file)) return fallback;
-
-    const raw = fs.readFileSync(file, "utf8");
-    if (!raw || !raw.trim()) return fallback;
-
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
-  }
-}
-
-function writeJson(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2), "utf8");
-}
 
 // --------------------
 // TOKENS (POSTGRES)
@@ -93,34 +71,67 @@ async function deleteTokens(discordId) {
 }
 
 // --------------------
-// SNAPSHOTS (JSON FILE)
+// SNAPSHOTS (POSTGRES)
 // --------------------
-function saveUserLockerSnapshot(discordId, snapshot) {
-  const data = readJson(LOCKER_SNAPSHOTS_FILE, {});
-  data[discordId] = snapshot;
-  writeJson(LOCKER_SNAPSHOTS_FILE, data);
+async function saveUserLockerSnapshot(discordId, snapshot) {
+  await pool.query(
+    `
+    INSERT INTO locker_snapshots (
+      discord_user_id,
+      snapshot_json,
+      updated_at
+    )
+    VALUES ($1, $2::jsonb, $3)
+    ON CONFLICT (discord_user_id)
+    DO UPDATE SET
+      snapshot_json = EXCLUDED.snapshot_json,
+      updated_at = EXCLUDED.updated_at
+    `,
+    [discordId, JSON.stringify(snapshot || {}), Date.now()]
+  );
 }
 
-function getAllLockerSnapshots() {
-  return readJson(LOCKER_SNAPSHOTS_FILE, {});
+async function getAllLockerSnapshots() {
+  const result = await pool.query(`
+    SELECT discord_user_id, snapshot_json
+    FROM locker_snapshots
+  `);
+
+  const out = {};
+
+  for (const row of result.rows) {
+    out[row.discord_user_id] = row.snapshot_json;
+  }
+
+  return out;
 }
 
-function getLockerSnapshot(discordId) {
-  const data = readJson(LOCKER_SNAPSHOTS_FILE, {});
-  return data[discordId] || null;
+async function getLockerSnapshot(discordId) {
+  const result = await pool.query(
+    `
+    SELECT snapshot_json
+    FROM locker_snapshots
+    WHERE discord_user_id = $1
+    `,
+    [discordId]
+  );
+
+  if (!result.rows.length) return null;
+  return result.rows[0].snapshot_json;
 }
 
-function deleteUserLockerSnapshot(discordId) {
-  const data = readJson(LOCKER_SNAPSHOTS_FILE, {});
-  delete data[discordId];
-  writeJson(LOCKER_SNAPSHOTS_FILE, data);
+async function deleteUserLockerSnapshot(discordId) {
+  await pool.query(
+    `DELETE FROM locker_snapshots WHERE discord_user_id = $1`,
+    [discordId]
+  );
 }
 
 // --------------------
 // COSMETIC STATS
 // --------------------
-function computeCosmeticStats(cosmeticIdLower) {
-  const data = getAllLockerSnapshots();
+async function computeCosmeticStats(cosmeticIdLower) {
+  const data = await getAllLockerSnapshots();
 
   let owners = 0;
   let totalTrackedUsers = 0;
