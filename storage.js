@@ -1,7 +1,9 @@
+// storage.js
+
 const fs = require("fs");
 const path = require("path");
+const pool = require("./database");
 
-const TOKENS_FILE = path.join(__dirname, "tokens.json");
 const LOCKER_SNAPSHOTS_FILE = path.join(__dirname, "lockerSnapshots.json");
 
 function readJson(file, fallback = {}) {
@@ -22,27 +24,76 @@ function writeJson(file, data) {
 }
 
 // --------------------
-// TOKENS
+// TOKENS (POSTGRES)
 // --------------------
-function getTokens(discordId) {
-  const data = readJson(TOKENS_FILE, {});
-  return data[discordId] || null;
+async function getTokens(discordId) {
+  const result = await pool.query(
+    `
+    SELECT
+      epic_account_id,
+      access_token,
+      refresh_token,
+      expires_in,
+      created_at
+    FROM epic_tokens
+    WHERE discord_user_id = $1
+    `,
+    [discordId]
+  );
+
+  if (!result.rows.length) return null;
+
+  const row = result.rows[0];
+
+  return {
+    accountId: row.epic_account_id,
+    accessToken: row.access_token,
+    refreshToken: row.refresh_token,
+    expiresIn: row.expires_in,
+    createdAt: Number(row.created_at),
+  };
 }
 
-function saveTokens(discordId, tokens) {
-  const data = readJson(TOKENS_FILE, {});
-  data[discordId] = tokens;
-  writeJson(TOKENS_FILE, data);
+async function saveTokens(discordId, tokens) {
+  await pool.query(
+    `
+    INSERT INTO epic_tokens (
+      discord_user_id,
+      epic_account_id,
+      access_token,
+      refresh_token,
+      expires_in,
+      created_at
+    )
+    VALUES ($1, $2, $3, $4, $5, $6)
+    ON CONFLICT (discord_user_id)
+    DO UPDATE SET
+      epic_account_id = EXCLUDED.epic_account_id,
+      access_token = EXCLUDED.access_token,
+      refresh_token = EXCLUDED.refresh_token,
+      expires_in = EXCLUDED.expires_in,
+      created_at = EXCLUDED.created_at
+    `,
+    [
+      discordId,
+      tokens.accountId,
+      tokens.accessToken,
+      tokens.refreshToken,
+      tokens.expiresIn,
+      tokens.createdAt,
+    ]
+  );
 }
 
-function deleteTokens(discordId) {
-  const data = readJson(TOKENS_FILE, {});
-  delete data[discordId];
-  writeJson(TOKENS_FILE, data);
+async function deleteTokens(discordId) {
+  await pool.query(
+    `DELETE FROM epic_tokens WHERE discord_user_id = $1`,
+    [discordId]
+  );
 }
 
 // --------------------
-// SNAPSHOTS
+// SNAPSHOTS (JSON FILE)
 // --------------------
 function saveUserLockerSnapshot(discordId, snapshot) {
   const data = readJson(LOCKER_SNAPSHOTS_FILE, {});

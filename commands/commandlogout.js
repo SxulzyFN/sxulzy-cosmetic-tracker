@@ -1,6 +1,6 @@
-// commands/logout.js
+// commands/commandlogout.js
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
-const { deleteTokens, deleteUserLockerSnapshot } = require("../storage");
+const { deleteTokens } = require("../storage");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -8,16 +8,22 @@ module.exports = {
     .setDescription("Unlink your Epic Games account from the bot"),
 
   async execute(interaction) {
-    const discordUserId = interaction.user.id;
+    try {
+      await deleteTokens(interaction.user.id);
 
-    deleteTokens(discordUserId);
-    deleteUserLockerSnapshot(discordUserId);
+      const embed = new EmbedBuilder()
+        .setColor(0x2ecc71)
+        .setTitle("✅ Logged out")
+        .setDescription("Your saved Epic login has been removed.");
 
-    const embed = new EmbedBuilder()
-      .setColor(0x2b2d31)
-      .setTitle("✅ Logged out successfully")
-      .setDescription("Your Epic link and saved locker snapshot have been removed.");
+      return interaction.reply({ embeds: [embed], ephemeral: true });
+    } catch (error) {
+      console.error("Logout error:", error);
 
-    return interaction.reply({ embeds: [embed] }); // no ephemeral
+      return interaction.reply({
+        content: `❌ Failed to log out: ${error.message || "Unknown error"}`,
+        ephemeral: true,
+      });
+    }
   },
 };

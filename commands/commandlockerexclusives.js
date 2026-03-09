@@ -212,7 +212,7 @@ module.exports = {
     await interaction.deferReply();
 
     const discordId = interaction.user.id;
-    let tokens = getTokens(discordId);
+    let tokens = await getTokens(discordId);
 
     if (!tokens?.accessToken || !tokens?.accountId) {
       const embed = new EmbedBuilder()
@@ -252,7 +252,7 @@ module.exports = {
           createdAt: Date.now(),
         };
 
-        saveTokens(discordId, savedTokens);
+        await saveTokens(discordId, savedTokens);
         tokens = savedTokens;
 
         lockerData = await getLocker(tokens.accessToken, tokens.accountId);
@@ -340,16 +340,14 @@ module.exports = {
       items: renderable,
     });
 
-    const imageName = `locker-exclusives-${Date.now()}.png`;
-
     const attachment = new AttachmentBuilder(buffer, {
-      name: imageName,
+      name: "locker-exclusives.png",
     });
 
     const embed = new EmbedBuilder()
       .setColor(0x5865f2)
       .setTitle(`Exclusives (${renderable.length})`)
-      .setImage(`attachment://${imageName}`);
+      .setImage("attachment://locker-exclusives.png");
 
     return interaction.editReply({
       embeds: [embed],

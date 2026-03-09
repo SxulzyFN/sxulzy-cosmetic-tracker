@@ -389,7 +389,7 @@ module.exports = {
     await interaction.deferReply();
 
     const discordId = interaction.user.id;
-    let tokens = getTokens(discordId);
+    let tokens = await getTokens(discordId);
 
     if (!tokens?.accessToken || !tokens?.accountId) {
       const embed = new EmbedBuilder()
@@ -429,7 +429,7 @@ module.exports = {
             createdAt: Date.now(),
           };
 
-          saveTokens(discordId, savedTokens);
+          await saveTokens(discordId, savedTokens);
           tokens = savedTokens;
 
           lockerData = await getLocker(tokens.accessToken, tokens.accountId);
