@@ -1,9 +1,8 @@
 // utils/exclusiveRoleSync.js
 const axios = require("axios");
-const { PermissionsBitField } = require("discord.js");
-const { EXCLUSIVES_LIST } = require("./exclusiveslist");
+const roleConfig = require("./exclusiveslist");
 
-const FORTNITE_API_TTL = 6 * 60 * 60 * 1000;
+const FORTNITE_API_TTL = 1000 * 60 * 60 * 6;
 
 let cachedAt = 0;
 let cosmeticsById = null;
@@ -31,17 +30,16 @@ async function loadCosmeticIndex() {
     timeout: 30000,
   });
 
-  const data = Array.isArray(res.data?.data) ? res.data.data : [];
-
+  const all = Array.isArray(res.data?.data) ? res.data.data : [];
   cosmeticsById = new Map();
   cosmeticsByName = new Map();
 
-  for (const cosmetic of data) {
+  for (const cosmetic of all) {
     const id = normalize(cosmetic?.id);
     const name = normalize(cosmetic?.name);
 
     if (id) cosmeticsById.set(id, cosmetic);
-    if (name) cosmeticsByName.set(name, cosmetic);
+    if (name && !cosmeticsByName.has(name)) cosmeticsByName.set(name, cosmetic);
   }
 
   cachedAt = now;
@@ -52,23 +50,12 @@ async function resolveCosmeticId(entry) {
   const directId = normalize(entry?.cosmetic?.id);
   if (directId) return directId;
 
-  const name = normalize(entry?.cosmetic?.name);
-  if (!name) return null;
+  const byName = normalize(entry?.cosmetic?.name);
+  if (!byName) return null;
 
   const { cosmeticsByName } = await loadCosmeticIndex();
-  const match = cosmeticsByName.get(name);
-
+  const match = cosmeticsByName.get(byName);
   return match?.id ? normalize(match.id) : null;
-}
-
-function entryRoleLabel(entry) {
-  return safeRoleName(
-    entry?.roleLabel ||
-      entry?.label ||
-      entry?.cosmetic?.name ||
-      entry?.cosmetic?.id ||
-      "Exclusive"
-  );
 }
 
 function collectSnapshotStrings(snapshotCosmetic) {
@@ -119,11 +106,10 @@ function snapshotHasStyle(snapshotCosmetic, styleName) {
   if (!want) return false;
 
   const strings = collectSnapshotStrings(snapshotCosmetic);
-
   if (strings.has(want)) return true;
 
-  for (const s of strings) {
-    if (s.includes(want)) return true;
+  for (const value of strings) {
+    if (value.includes(want)) return true;
   }
 
   return false;
@@ -132,6 +118,88 @@ function snapshotHasStyle(snapshotCosmetic, styleName) {
 function snapshotHasCosmeticId(snapshot, cosmeticId) {
   const cosmetics = snapshot?.cosmetics || {};
   return Boolean(cosmetics[normalize(cosmeticId)]);
+}
+
+function buildEntriesFromConfig() {
+  if (Array.isArray(roleConfig.EXCLUSIVES_LIST)) {
+    return roleConfig.EXCLUSIVES_LIST.map((entry) => ({
+      ...entry,
+      roleName: safeRoleName(
+        entry.roleName ||
+          entry.rareLabel ||
+          entry.roleLabel ||
+          entry.label ||
+          entry?.cosmetic?.name ||
+          entry?.cosmetic?.id ||
+          "Exclusive"
+      ),
+      rareLabel:
+        entry.rareLabel ||
+        entry.label ||
+        entry.roleLabel ||
+        entry?.cosmetic?.name ||
+        entry?.cosmetic?.id ||
+        "Exclusive",
+    }));
+  }
+
+  const entries = [];
+
+  const itemsConfig = roleConfig.ALL_EXCLUSIVE_ITEMS || {};
+  for (const [category, ids] of Object.entries(itemsConfig)) {
+    for (const id of Array.isArray(ids) ? ids : []) {
+      entries.push({
+        kind: "item",
+        category,
+        cosmetic: { id: String(id) },
+        roleName: safeRoleName(String(id)),
+        rareLabel: String(id),
+      });
+    }
+  }
+
+  const stylesConfig =
+    roleConfig.EXCLUSIVE_EDIT_STYLES || roleConfig.ALL_EXCLUSIVE_STYLES || [];
+
+  if (Array.isArray(stylesConfig)) {
+    for (const style of stylesConfig) {
+      entries.push({
+        kind: "style",
+        category: style.category || "styles",
+        cosmetic: {
+          name: String(style.cosmeticName || ""),
+        },
+        styleName: String(style.styleText || ""),
+        roleName: safeRoleName(
+          `${style.cosmeticName || "Style"} | ${style.styleText || "Style"}`
+        ),
+        rareLabel: `${style.cosmeticName || "Style"} | ${style.styleText || "Style"}`,
+      });
+    }
+  } else {
+    for (const [category, list] of Object.entries(stylesConfig)) {
+      for (const style of Array.isArray(list) ? list : []) {
+        entries.push({
+          kind: "style",
+          category,
+          cosmetic: {
+            name: String(style.cosmeticName || ""),
+          },
+          styleName: String(style.styleText || ""),
+          roleName: safeRoleName(
+            `${style.cosmeticName || "Style"} | ${style.styleText || "Style"}`
+          ),
+          rareLabel: `${style.cosmeticName || "Style"} | ${style.styleText || "Style"}`,
+        });
+      }
+    }
+  }
+
+  return entries;
+}
+
+function getRoleEntries() {
+  return buildEntriesFromConfig();
 }
 
 async function snapshotOwnsEntry(snapshot, entry) {
@@ -153,13 +221,6 @@ async function snapshotOwnsEntry(snapshot, entry) {
   }
 
   return true;
-}
-
-function getRoleEntries() {
-  return (Array.isArray(EXCLUSIVES_LIST) ? EXCLUSIVES_LIST : []).map((entry) => ({
-    ...entry,
-    roleName: entryRoleLabel(entry),
-  }));
 }
 
 async function ensureRole(guild, roleName) {
@@ -187,7 +248,7 @@ async function syncExclusiveRolesForMember(member, snapshot) {
   }
 
   const guild = member.guild;
-  const me = await guild.members.fetchMe().catch(() => guild.members.me);
+  const me = guild.members.me || (await guild.members.fetchMe().catch(() => null));
 
   if (!me) {
     return {
@@ -198,24 +259,12 @@ async function syncExclusiveRolesForMember(member, snapshot) {
     };
   }
 
-  if (!me.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
+  if (!me.permissions.has("ManageRoles")) {
     return {
       created: [],
       added: [],
       removed: [],
       reason: "missing_manage_roles_permission",
-    };
-  }
-
-  if (
-    member.id !== guild.ownerId &&
-    me.roles.highest.comparePositionTo(member.roles.highest) <= 0
-  ) {
-    return {
-      created: [],
-      added: [],
-      removed: [],
-      reason: "bot_role_too_low_for_member",
     };
   }
 
@@ -226,15 +275,14 @@ async function syncExclusiveRolesForMember(member, snapshot) {
 
   for (const entry of entries) {
     const shouldHave = await snapshotOwnsEntry(snapshot, entry);
-    const roleName = entry.roleName;
-
+    const roleName = safeRoleName(entry.roleName || entry.rareLabel || "Exclusive");
     if (!roleName) continue;
 
     let role = guild.roles.cache.find((r) => r.name === roleName);
 
     if (shouldHave && !role) {
-      role = await ensureRole(guild, roleName);
-      created.push(role.name);
+      role = await ensureRole(guild, roleName).catch(() => null);
+      if (role) created.push(role.name);
     }
 
     if (!role) continue;
@@ -246,22 +294,26 @@ async function syncExclusiveRolesForMember(member, snapshot) {
     const hasRole = member.roles.cache.has(role.id);
 
     if (shouldHave && !hasRole) {
-      await member.roles.add(role.id).catch(() => {});
+      await member.roles.add(role).catch(() => {});
       added.push(role.name);
     }
 
     if (!shouldHave && hasRole) {
-      await member.roles.remove(role.id).catch(() => {});
+      await member.roles.remove(role).catch(() => {});
       removed.push(role.name);
     }
   }
 
-  return { created, added, removed, reason: "ok" };
+  return {
+    created,
+    added,
+    removed,
+    reason: "ok",
+  };
 }
 
 module.exports = {
   normalize,
-  safeRoleName,
   loadCosmeticIndex,
   resolveCosmeticId,
   collectSnapshotStrings,
