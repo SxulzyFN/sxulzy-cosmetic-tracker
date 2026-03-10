@@ -9,10 +9,9 @@ const {
 async function buildRareOwnersBoard() {
   const snapshots = (await getAllLockerSnapshots()) || {};
   const snapshotValues = Object.values(snapshots);
-
   const trackedLockers = snapshotValues.length;
-  const entries = getRoleEntries();
 
+  const entries = getRoleEntries();
   const rows = [];
 
   for (const entry of entries) {
@@ -33,6 +32,7 @@ async function buildRareOwnersBoard() {
     });
   }
 
+  // rarest first
   rows.sort((a, b) => {
     if (a.owners !== b.owners) return a.owners - b.owners;
     return String(a.label).localeCompare(String(b.label));
