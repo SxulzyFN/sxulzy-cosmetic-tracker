@@ -1,136 +1,228 @@
 // storage.js
-const pool = require("./database");
+const fs = require("fs");
+const path = require("path");
+
+let Pool = null;
+try {
+  ({ Pool } = require("pg"));
+} catch {
+  Pool = null;
+}
+
+const DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
+const USE_DB = Boolean(DATABASE_URL && Pool);
+
+const TOKENS_FILE = path.join(__dirname, "tokens.json");
+const LOCKER_SNAPSHOTS_FILE = path.join(__dirname, "lockerSnapshots.json");
+
+let pool = null;
+let dbReadyPromise = null;
+
+function ensureJsonFile(file, fallback = {}) {
+  if (!fs.existsSync(file)) {
+    fs.writeFileSync(file, JSON.stringify(fallback, null, 2), "utf8");
+  }
+}
+
+function readJson(file, fallback = {}) {
+  try {
+    ensureJsonFile(file, fallback);
+    const raw = fs.readFileSync(file, "utf8");
+    if (!raw || !raw.trim()) return fallback;
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJson(file, data) {
+  ensureJsonFile(file, {});
+  fs.writeFileSync(file, JSON.stringify(data, null, 2), "utf8");
+}
+
+function getPool() {
+  if (!USE_DB) return null;
+  if (!pool) {
+    pool = new Pool({
+      connectionString: DATABASE_URL,
+      ssl:
+        DATABASE_URL.includes("railway.internal") || DATABASE_URL.includes("localhost")
+          ? false
+          : { rejectUnauthorized: false },
+    });
+  }
+  return pool;
+}
+
+async function ensureDb() {
+  if (!USE_DB) return;
+
+  if (!dbReadyPromise) {
+    dbReadyPromise = (async () => {
+      const db = getPool();
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS user_tokens (
+          discord_id TEXT PRIMARY KEY,
+          data JSONB NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS locker_snapshots (
+          discord_id TEXT PRIMARY KEY,
+          data JSONB NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+    })();
+  }
+
+  await dbReadyPromise;
+}
 
 // --------------------
-// TOKENS (POSTGRES)
+// TOKENS
 // --------------------
 async function getTokens(discordId) {
-  const result = await pool.query(
-    `
-    SELECT
-      epic_account_id,
-      access_token,
-      refresh_token,
-      expires_in,
-      created_at
-    FROM epic_tokens
-    WHERE discord_user_id = $1
-    `,
-    [discordId]
-  );
+  const id = String(discordId || "").trim();
+  if (!id) return null;
 
-  if (!result.rows.length) return null;
+  if (USE_DB) {
+    await ensureDb();
+    const db = getPool();
+    const result = await db.query(
+      `SELECT data FROM user_tokens WHERE discord_id = $1 LIMIT 1`,
+      [id]
+    );
+    return result.rows[0]?.data || null;
+  }
 
-  const row = result.rows[0];
-
-  return {
-    accountId: row.epic_account_id,
-    accessToken: row.access_token,
-    refreshToken: row.refresh_token,
-    expiresIn: row.expires_in,
-    createdAt: Number(row.created_at),
-  };
+  const data = readJson(TOKENS_FILE, {});
+  return data[id] || null;
 }
 
 async function saveTokens(discordId, tokens) {
-  await pool.query(
-    `
-    INSERT INTO epic_tokens (
-      discord_user_id,
-      epic_account_id,
-      access_token,
-      refresh_token,
-      expires_in,
-      created_at
-    )
-    VALUES ($1, $2, $3, $4, $5, $6)
-    ON CONFLICT (discord_user_id)
-    DO UPDATE SET
-      epic_account_id = EXCLUDED.epic_account_id,
-      access_token = EXCLUDED.access_token,
-      refresh_token = EXCLUDED.refresh_token,
-      expires_in = EXCLUDED.expires_in,
-      created_at = EXCLUDED.created_at
-    `,
-    [
-      discordId,
-      tokens.accountId,
-      tokens.accessToken,
-      tokens.refreshToken,
-      tokens.expiresIn,
-      tokens.createdAt,
-    ]
-  );
+  const id = String(discordId || "").trim();
+  if (!id) return;
+
+  if (USE_DB) {
+    await ensureDb();
+    const db = getPool();
+    await db.query(
+      `
+      INSERT INTO user_tokens (discord_id, data, updated_at)
+      VALUES ($1, $2::jsonb, NOW())
+      ON CONFLICT (discord_id)
+      DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()
+      `,
+      [id, JSON.stringify(tokens || {})]
+    );
+    return;
+  }
+
+  const data = readJson(TOKENS_FILE, {});
+  data[id] = tokens || {};
+  writeJson(TOKENS_FILE, data);
 }
 
 async function deleteTokens(discordId) {
-  await pool.query(
-    `DELETE FROM epic_tokens WHERE discord_user_id = $1`,
-    [discordId]
-  );
+  const id = String(discordId || "").trim();
+  if (!id) return;
+
+  if (USE_DB) {
+    await ensureDb();
+    const db = getPool();
+    await db.query(`DELETE FROM user_tokens WHERE discord_id = $1`, [id]);
+    return;
+  }
+
+  const data = readJson(TOKENS_FILE, {});
+  delete data[id];
+  writeJson(TOKENS_FILE, data);
 }
 
 // --------------------
-// SNAPSHOTS (POSTGRES)
+// SNAPSHOTS
 // --------------------
 async function saveUserLockerSnapshot(discordId, snapshot) {
-  await pool.query(
-    `
-    INSERT INTO locker_snapshots (
-      discord_user_id,
-      snapshot_json,
-      updated_at
-    )
-    VALUES ($1, $2::jsonb, $3)
-    ON CONFLICT (discord_user_id)
-    DO UPDATE SET
-      snapshot_json = EXCLUDED.snapshot_json,
-      updated_at = EXCLUDED.updated_at
-    `,
-    [discordId, JSON.stringify(snapshot || {}), Date.now()]
-  );
+  const id = String(discordId || "").trim();
+  if (!id) return;
+
+  if (USE_DB) {
+    await ensureDb();
+    const db = getPool();
+    await db.query(
+      `
+      INSERT INTO locker_snapshots (discord_id, data, updated_at)
+      VALUES ($1, $2::jsonb, NOW())
+      ON CONFLICT (discord_id)
+      DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()
+      `,
+      [id, JSON.stringify(snapshot || {})]
+    );
+    return;
+  }
+
+  const data = readJson(LOCKER_SNAPSHOTS_FILE, {});
+  data[id] = snapshot || {};
+  writeJson(LOCKER_SNAPSHOTS_FILE, data);
 }
 
 async function getAllLockerSnapshots() {
-  const result = await pool.query(`
-    SELECT discord_user_id, snapshot_json
-    FROM locker_snapshots
-  `);
-
-  const out = {};
-
-  for (const row of result.rows) {
-    out[row.discord_user_id] = row.snapshot_json;
+  if (USE_DB) {
+    await ensureDb();
+    const db = getPool();
+    const result = await db.query(`SELECT discord_id, data FROM locker_snapshots`);
+    const out = {};
+    for (const row of result.rows) {
+      out[row.discord_id] = row.data;
+    }
+    return out;
   }
 
-  return out;
+  return readJson(LOCKER_SNAPSHOTS_FILE, {});
 }
 
 async function getLockerSnapshot(discordId) {
-  const result = await pool.query(
-    `
-    SELECT snapshot_json
-    FROM locker_snapshots
-    WHERE discord_user_id = $1
-    `,
-    [discordId]
-  );
+  const id = String(discordId || "").trim();
+  if (!id) return null;
 
-  if (!result.rows.length) return null;
-  return result.rows[0].snapshot_json;
+  if (USE_DB) {
+    await ensureDb();
+    const db = getPool();
+    const result = await db.query(
+      `SELECT data FROM locker_snapshots WHERE discord_id = $1 LIMIT 1`,
+      [id]
+    );
+    return result.rows[0]?.data || null;
+  }
+
+  const data = readJson(LOCKER_SNAPSHOTS_FILE, {});
+  return data[id] || null;
 }
 
 async function deleteUserLockerSnapshot(discordId) {
-  await pool.query(
-    `DELETE FROM locker_snapshots WHERE discord_user_id = $1`,
-    [discordId]
-  );
+  const id = String(discordId || "").trim();
+  if (!id) return;
+
+  if (USE_DB) {
+    await ensureDb();
+    const db = getPool();
+    await db.query(`DELETE FROM locker_snapshots WHERE discord_id = $1`, [id]);
+    return;
+  }
+
+  const data = readJson(LOCKER_SNAPSHOTS_FILE, {});
+  delete data[id];
+  writeJson(LOCKER_SNAPSHOTS_FILE, data);
 }
 
 // --------------------
 // COSMETIC STATS
 // --------------------
 async function computeCosmeticStats(cosmeticIdLower) {
+  const target = String(cosmeticIdLower || "").toLowerCase();
   const data = await getAllLockerSnapshots();
 
   let owners = 0;
@@ -146,7 +238,7 @@ async function computeCosmeticStats(cosmeticIdLower) {
     const cosmetics = snapshot?.cosmetics;
     if (!cosmetics || typeof cosmetics !== "object") continue;
 
-    const cosmetic = cosmetics[String(cosmeticIdLower).toLowerCase()];
+    const cosmetic = cosmetics[target];
     if (!cosmetic) continue;
 
     owners++;
