@@ -7,11 +7,10 @@ const {
 } = require("./exclusiveRoleSync");
 
 async function buildRareOwnersBoard() {
-  const snapshots = getAllLockerSnapshots() || {};
+  const snapshots = (await getAllLockerSnapshots()) || {};
   const snapshotValues = Object.values(snapshots);
 
   const trackedLockers = snapshotValues.length;
-
   const entries = getRoleEntries();
 
   const rows = [];
@@ -26,7 +25,7 @@ async function buildRareOwnersBoard() {
     }
 
     rows.push({
-      label: entry.rareLabel || entry.roleName,
+      label: entry.rareLabel || entry.roleName || "Unknown",
       owners,
       category: entry.category || "exclusive",
       kind: entry.kind || "cosmetic",
@@ -35,8 +34,8 @@ async function buildRareOwnersBoard() {
   }
 
   rows.sort((a, b) => {
-    if (b.owners !== a.owners) return b.owners - a.owners;
-    return a.label.localeCompare(b.label);
+    if (a.owners !== b.owners) return a.owners - b.owners;
+    return String(a.label).localeCompare(String(b.label));
   });
 
   return {
