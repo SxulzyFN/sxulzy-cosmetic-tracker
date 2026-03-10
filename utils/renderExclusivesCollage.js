@@ -1,4 +1,4 @@
-// utils/renderExclusivesCollage.js
+// utils/renderLockerCollage.js
 const sharp = require("sharp");
 const axios = require("axios");
 
@@ -148,10 +148,10 @@ function makeTextSvg({
   `);
 }
 
-async function renderExclusivesCollage({ username, categoryTitle, title, items }) {
-  const resolvedTitle = String(categoryTitle || title || "Exclusives");
+async function renderLockerCollage({ username, categoryTitle, title, items }) {
+  const resolvedTitle = String(categoryTitle || title || "Locker");
   const resolvedUsername = String(username || "Unknown");
-  const safe = (items || []).filter((i) => i && i.iconUrl).slice(0, 2000);
+  const safe = (items || []).filter((i) => i && i.iconUrl).slice(0, 1500);
 
   const ICON = 92;
   const TEXT_H = 24;
@@ -319,4 +319,4 @@ async function renderExclusivesCollage({ username, categoryTitle, title, items }
   return img.png({ compressionLevel: 9 }).toBuffer();
 }
 
-module.exports = { renderExclusivesCollage };
+module.exports = { renderLockerCollage };
