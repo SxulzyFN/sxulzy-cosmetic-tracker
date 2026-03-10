@@ -30,12 +30,18 @@ function esc(s) {
 }
 
 function cleanText(value) {
-  const cleaned = String(value || "")
-    .replace(/[^\x20-\x7E®©’‘“”–—…]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return cleaned || "Unknown";
+  return (
+    String(value || "")
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[\u2013\u2014]/g, "-")
+      .replace(/\u2026/g, "...")
+      .replace(/\u00AE/g, "(R)")
+      .replace(/\u00A9/g, "(C)")
+      .replace(/[^\x20-\x7E]/g, "")
+      .replace(/\s+/g, " ")
+      .trim() || "Unknown"
+  );
 }
 
 async function fetchBuffer(url) {
@@ -87,19 +93,17 @@ function wrapTwoLines(text, maxCharsPerLine = 14) {
       lines[line] =
         w.length <= maxCharsPerLine
           ? w
-          : `${w.slice(0, Math.max(1, maxCharsPerLine - 1))}…`;
+          : `${w.slice(0, Math.max(1, maxCharsPerLine - 3))}...`;
       continue;
     }
 
-    const base = lines[1] || "";
-    lines[1] = !base
-      ? `${w.slice(0, Math.max(1, maxCharsPerLine - 1))}…`
-      : `${base.slice(0, Math.max(1, maxCharsPerLine - 1))}…`;
+    const current = lines[1] || "";
+    const merged = current ? `${current} ${w}` : w;
+    lines[1] =
+      merged.length <= maxCharsPerLine
+        ? merged
+        : `${merged.slice(0, Math.max(1, maxCharsPerLine - 3))}...`;
     return lines;
-  }
-
-  if (lines[1].length > maxCharsPerLine) {
-    lines[1] = `${lines[1].slice(0, Math.max(1, maxCharsPerLine - 1))}…`;
   }
 
   return lines;
@@ -279,12 +283,13 @@ async function renderExclusivesCollage({ username, categoryTitle, title, items }
       } catch {}
     }
 
-    const displayName =
+    const displayName = cleanText(
       safe[i].name ||
-      safe[i].id ||
-      safe[i].idPart ||
-      safe[i].cosmeticId ||
-      "Unknown";
+        safe[i].id ||
+        safe[i].idPart ||
+        safe[i].cosmeticId ||
+        "Unknown"
+    );
 
     const [l1, l2] = wrapTwoLines(displayName, 14);
 
