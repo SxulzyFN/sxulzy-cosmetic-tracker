@@ -9,7 +9,12 @@ const {
 const axios = require("axios");
 
 const { getLocker, refreshAccessToken } = require("../epic");
-const { getTokens, saveTokens, saveUserLockerSnapshot } = require("../storage");
+const {
+  getTokens,
+  saveTokens,
+  saveUserLockerSnapshot,
+} = require("../storage");
+const { syncExclusiveRolesForMember } = require("../utils/exclusiveRoleSync");
 
 // --------------------
 // Exact user-requested order
@@ -449,6 +454,15 @@ module.exports = {
     const itemsWithPrefix = extractItemsWithPrefix(lockerData);
     const snapshot = buildSnapshotForStats(itemsWithPrefix);
     await saveUserLockerSnapshot(discordId, snapshot);
+
+    if (interaction.inGuild()) {
+      try {
+        const member = interaction.member;
+        await syncExclusiveRolesForMember(member, snapshot);
+      } catch (roleError) {
+        console.error("Role sync failed:", roleError);
+      }
+    }
 
     const resolvedCategories = await resolveCategories(itemsWithPrefix);
     const categories = buildCategoriesInFixedOrder(resolvedCategories);

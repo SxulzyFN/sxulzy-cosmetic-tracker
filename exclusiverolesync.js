@@ -1,5 +1,4 @@
 // utils/exclusiveRoleSync.js
-
 const axios = require("axios");
 const { EXCLUSIVES_LIST } = require("./exclusiveslist");
 
@@ -23,7 +22,7 @@ function safeRoleName(value) {
 async function loadCosmeticIndex() {
   const now = Date.now();
 
-  if (cosmeticsById && cosmeticsByName && (now - cachedAt) < FORTNITE_API_TTL) {
+  if (cosmeticsById && cosmeticsByName && now - cachedAt < FORTNITE_API_TTL) {
     return { cosmeticsById, cosmeticsByName };
   }
 
@@ -78,25 +77,6 @@ function entryRoleLabel(entry) {
   }
 
   return safeRoleName(cosmeticName);
-}
-
-function entryRareLabel(entry) {
-  if (entry?.kind === "bundle") {
-    return String(entry?.label || entry?.roleLabel || "Bundle");
-  }
-
-  if (entry?.label) return String(entry.label);
-
-  const cosmeticName =
-    entry?.cosmetic?.name ||
-    entry?.cosmetic?.id ||
-    "Unknown Cosmetic";
-
-  if (entry?.kind === "style" && entry?.styleName) {
-    return `${cosmeticName} | ${entry.styleName}`;
-  }
-
-  return cosmeticName;
 }
 
 function collectSnapshotStrings(snapshotCosmetic) {
@@ -250,8 +230,6 @@ module.exports = {
   safeRoleName,
   loadCosmeticIndex,
   resolveCosmeticId,
-  entryRoleLabel,
-  entryRareLabel,
   collectSnapshotStrings,
   snapshotHasStyle,
   snapshotHasCosmeticId,
