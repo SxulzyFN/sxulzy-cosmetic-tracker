@@ -113,9 +113,6 @@ module.exports = {
       // Buttons
       // -----------------------------
       if (interaction.isButton()) {
-        // -----------------------------
-        // Login button -> acknowledge immediately with modal
-        // -----------------------------
         if (interaction.customId === "enter_auth_code") {
           const modal = new ModalBuilder()
             .setCustomId("auth_code_modal")
@@ -134,9 +131,6 @@ module.exports = {
           return await interaction.showModal(modal);
         }
 
-        // -----------------------------
-        // Locker category buttons
-        // -----------------------------
         const customId = String(interaction.customId || "");
         const parts = customId.split(":");
         const action = parts[0];
@@ -160,9 +154,6 @@ module.exports = {
           });
         }
 
-        // -----------------------------
-        // Category page buttons -> deferUpdate immediately
-        // -----------------------------
         if (action === "locker_catpage") {
           await interaction.deferUpdate();
 
@@ -176,9 +167,6 @@ module.exports = {
           return await interaction.editReply(view);
         }
 
-        // -----------------------------
-        // Category image buttons -> deferReply immediately
-        // -----------------------------
         if (action === "locker_cat") {
           const categoryKey = value;
           const label = CATEGORY_META[categoryKey]?.label || categoryKey;
@@ -228,7 +216,6 @@ module.exports = {
       // -----------------------------
       if (interaction.isModalSubmit()) {
         if (interaction.customId === "auth_code_modal") {
-          // Acknowledge immediately so slow Epic responses never time out
           await interaction.deferReply({ ephemeral: true });
 
           const authCode = interaction.fields.getTextInputValue("auth_code")?.trim();
@@ -247,7 +234,7 @@ module.exports = {
             createdAt: Date.now(),
           };
 
-          saveTokens(interaction.user.id, savedTokens);
+          await saveTokens(interaction.user.id, savedTokens);
 
           const embed = new EmbedBuilder()
             .setColor(0x2ecc71)
