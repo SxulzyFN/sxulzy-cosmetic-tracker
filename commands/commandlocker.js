@@ -44,9 +44,6 @@ const CATEGORY_ORDER = [
   { key: "lego_building_props", label: "LEGO® Building Props" },
 ];
 
-// --------------------
-// Fallback mapping from locker template prefix
-// --------------------
 const PREFIX_TO_CATEGORY = {
   AthenaCharacter: "outfits",
   AthenaBackpack: "backblings",
@@ -83,9 +80,6 @@ const PREFIX_TO_CATEGORY = {
   JunoBuildingProp: "lego_building_props",
 };
 
-// --------------------
-// Primary mapping from Fortnite API cosmetic type
-// --------------------
 const API_TYPE_TO_CATEGORY = {
   outfit: "outfits",
   backpack: "backblings",
@@ -188,14 +182,10 @@ function getCategoryFromApiCosmetic(cosmetic) {
     .map((x) => normalizeText(x));
 
   for (const candidate of typeCandidates) {
-    if (API_TYPE_TO_CATEGORY[candidate]) {
-      return API_TYPE_TO_CATEGORY[candidate];
-    }
+    if (API_TYPE_TO_CATEGORY[candidate]) return API_TYPE_TO_CATEGORY[candidate];
 
     if (candidate.startsWith("cosmetic.itemtype.")) {
-      const raw = candidate
-        .replace("cosmetic.itemtype.", "")
-        .replace(/_/g, " ");
+      const raw = candidate.replace("cosmetic.itemtype.", "").replace(/_/g, " ");
       if (API_TYPE_TO_CATEGORY[raw]) return API_TYPE_TO_CATEGORY[raw];
     }
   }
@@ -334,13 +324,15 @@ async function resolveCategories(itemsWithPrefix) {
 }
 
 function buildCategoriesInFixedOrder(resolvedCategories) {
-  return CATEGORY_ORDER.map((c) => ({
-    key: c.key,
-    label: c.label,
-    count: Array.isArray(resolvedCategories[c.key])
-      ? resolvedCategories[c.key].length
-      : 0,
-  })).filter((c) => c.count > 0);
+  return CATEGORY_ORDER
+    .map((c) => ({
+      key: c.key,
+      label: c.label,
+      count: Array.isArray(resolvedCategories[c.key])
+        ? resolvedCategories[c.key].length
+        : 0,
+    }))
+    .filter((c) => c.count > 0);
 }
 
 function buildCategoryPicker(discordUserId, categories, page = 0) {
@@ -401,7 +393,7 @@ module.exports = {
     await interaction.deferReply();
 
     const discordId = interaction.user.id;
-    let tokens = getTokens(discordId);
+    let tokens = await getTokens(discordId);
 
     if (!tokens?.accessToken || !tokens?.accountId) {
       const embed = new EmbedBuilder()
@@ -441,7 +433,7 @@ module.exports = {
             createdAt: Date.now(),
           };
 
-          saveTokens(discordId, savedTokens);
+          await saveTokens(discordId, savedTokens);
           tokens = savedTokens;
 
           lockerData = await getLocker(tokens.accessToken, tokens.accountId);
@@ -462,7 +454,7 @@ module.exports = {
 
     const itemsWithPrefix = extractItemsWithPrefix(lockerData);
     const snapshot = buildSnapshotForStats(itemsWithPrefix);
-    saveUserLockerSnapshot(discordId, snapshot);
+    await saveUserLockerSnapshot(discordId, snapshot);
 
     if (interaction.guild) {
       try {
@@ -484,8 +476,6 @@ module.exports = {
       } catch (err) {
         console.error("Role sync failed:", err);
       }
-    } else {
-      console.log("Role sync skipped: command was not run in a guild.");
     }
 
     const resolvedCategories = await resolveCategories(itemsWithPrefix);
