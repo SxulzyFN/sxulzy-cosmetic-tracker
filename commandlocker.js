@@ -193,7 +193,9 @@ function getCategoryFromApiCosmetic(cosmetic) {
     }
 
     if (candidate.startsWith("cosmetic.itemtype.")) {
-      const raw = candidate.replace("cosmetic.itemtype.", "").replace(/_/g, " ");
+      const raw = candidate
+        .replace("cosmetic.itemtype.", "")
+        .replace(/_/g, " ");
       if (API_TYPE_TO_CATEGORY[raw]) return API_TYPE_TO_CATEGORY[raw];
     }
   }
@@ -203,7 +205,9 @@ function getCategoryFromApiCosmetic(cosmetic) {
 
 function extractItemsWithPrefix(lockerData) {
   const out = [];
-  const changes = Array.isArray(lockerData?.profileChanges) ? lockerData.profileChanges : [];
+  const changes = Array.isArray(lockerData?.profileChanges)
+    ? lockerData.profileChanges
+    : [];
 
   for (const change of changes) {
     const itemsObj = change?.profile?.items;
@@ -302,7 +306,7 @@ async function resolveCategories(itemsWithPrefix) {
   for (const item of itemsWithPrefix) {
     const cosmetic = cosmeticsMap.get(normalizeId(item.idPart));
 
-    let categoryKey =
+    const categoryKey =
       getCategoryFromApiCosmetic(cosmetic) ||
       PREFIX_TO_CATEGORY[item.prefix] ||
       null;
@@ -330,20 +334,23 @@ async function resolveCategories(itemsWithPrefix) {
 }
 
 function buildCategoriesInFixedOrder(resolvedCategories) {
-  return CATEGORY_ORDER
-    .map((c) => ({
-      key: c.key,
-      label: c.label,
-      count: Array.isArray(resolvedCategories[c.key]) ? resolvedCategories[c.key].length : 0,
-    }))
-    .filter((c) => c.count > 0);
+  return CATEGORY_ORDER.map((c) => ({
+    key: c.key,
+    label: c.label,
+    count: Array.isArray(resolvedCategories[c.key])
+      ? resolvedCategories[c.key].length
+      : 0,
+  })).filter((c) => c.count > 0);
 }
 
 function buildCategoryPicker(discordUserId, categories, page = 0) {
   const pageSize = 8;
   const totalPages = Math.max(1, Math.ceil(categories.length / pageSize));
   const safePage = Math.max(0, Math.min(page, totalPages - 1));
-  const slice = categories.slice(safePage * pageSize, safePage * pageSize + pageSize);
+  const slice = categories.slice(
+    safePage * pageSize,
+    safePage * pageSize + pageSize
+  );
 
   const embed = new EmbedBuilder()
     .setColor(0x2b2d31)
@@ -394,7 +401,7 @@ module.exports = {
     await interaction.deferReply();
 
     const discordId = interaction.user.id;
-    let tokens = await getTokens(discordId);
+    let tokens = getTokens(discordId);
 
     if (!tokens?.accessToken || !tokens?.accountId) {
       const embed = new EmbedBuilder()
@@ -434,7 +441,7 @@ module.exports = {
             createdAt: Date.now(),
           };
 
-          await saveTokens(discordId, savedTokens);
+          saveTokens(discordId, savedTokens);
           tokens = savedTokens;
 
           lockerData = await getLocker(tokens.accessToken, tokens.accountId);
@@ -444,7 +451,9 @@ module.exports = {
             e2?.response?.data?.error ||
             e2.message;
 
-          return interaction.editReply(`❌ Error fetching locker after refresh: ${msg2}`);
+          return interaction.editReply(
+            `❌ Error fetching locker after refresh: ${msg2}`
+          );
         }
       } else {
         return interaction.editReply(`❌ Error fetching locker: ${msg}`);
@@ -453,15 +462,30 @@ module.exports = {
 
     const itemsWithPrefix = extractItemsWithPrefix(lockerData);
     const snapshot = buildSnapshotForStats(itemsWithPrefix);
-    await saveUserLockerSnapshot(discordId, snapshot);
+    saveUserLockerSnapshot(discordId, snapshot);
 
-    if (interaction.inGuild()) {
+    if (interaction.guild) {
       try {
-        const member = interaction.member;
-        await syncExclusiveRolesForMember(member, snapshot);
-      } catch (roleError) {
-        console.error("Role sync failed:", roleError);
+        const member = await interaction.guild.members.fetch(interaction.user.id);
+        const syncResult = await syncExclusiveRolesForMember(member, snapshot);
+
+        console.log("Role sync result:", {
+          user: interaction.user.tag,
+          userId: interaction.user.id,
+          guildId: interaction.guild.id,
+          created: syncResult.created?.length || 0,
+          added: syncResult.added?.length || 0,
+          removed: syncResult.removed?.length || 0,
+          reason: syncResult.reason || "unknown",
+          createdRoles: syncResult.created || [],
+          addedRoles: syncResult.added || [],
+          removedRoles: syncResult.removed || [],
+        });
+      } catch (err) {
+        console.error("Role sync failed:", err);
       }
+    } else {
+      console.log("Role sync skipped: command was not run in a guild.");
     }
 
     const resolvedCategories = await resolveCategories(itemsWithPrefix);
@@ -480,7 +504,9 @@ module.exports = {
       const embed = new EmbedBuilder()
         .setColor(0x2ecc71)
         .setTitle("✅ Locker Updated")
-        .setDescription("Your locker was fetched, but no supported locker categories were found.");
+        .setDescription(
+          "Your locker was fetched, but no supported locker categories were found."
+        );
 
       return interaction.editReply({ embeds: [embed] });
     }
