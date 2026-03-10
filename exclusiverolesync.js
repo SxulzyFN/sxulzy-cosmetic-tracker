@@ -1,5 +1,6 @@
 // utils/exclusiveRoleSync.js
 const axios = require("axios");
+const { PermissionsBitField } = require("discord.js");
 const { EXCLUSIVES_LIST } = require("./exclusiveslist");
 
 const FORTNITE_API_TTL = 6 * 60 * 60 * 1000;
@@ -61,22 +62,13 @@ async function resolveCosmeticId(entry) {
 }
 
 function entryRoleLabel(entry) {
-  if (entry?.kind === "bundle") {
-    return safeRoleName(entry?.roleLabel || entry?.label || "Bundle");
-  }
-
-  if (entry?.label) return safeRoleName(entry.label);
-
-  const cosmeticName =
-    entry?.cosmetic?.name ||
-    entry?.cosmetic?.id ||
-    "Unknown Cosmetic";
-
-  if (entry?.kind === "style" && entry?.styleName) {
-    return safeRoleName(`${cosmeticName} | ${entry.styleName}`);
-  }
-
-  return safeRoleName(cosmeticName);
+  return safeRoleName(
+    entry?.roleLabel ||
+      entry?.label ||
+      entry?.cosmetic?.name ||
+      entry?.cosmetic?.id ||
+      "Exclusive"
+  );
 }
 
 function collectSnapshotStrings(snapshotCosmetic) {
@@ -186,7 +178,45 @@ async function ensureRole(guild, roleName) {
 
 async function syncExclusiveRolesForMember(member, snapshot) {
   if (!member || !snapshot?.cosmetics) {
-    return { created: [], added: [], removed: [] };
+    return {
+      created: [],
+      added: [],
+      removed: [],
+      reason: "missing_member_or_snapshot",
+    };
+  }
+
+  const guild = member.guild;
+  const me = await guild.members.fetchMe().catch(() => guild.members.me);
+
+  if (!me) {
+    return {
+      created: [],
+      added: [],
+      removed: [],
+      reason: "bot_member_not_found",
+    };
+  }
+
+  if (!me.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
+    return {
+      created: [],
+      added: [],
+      removed: [],
+      reason: "missing_manage_roles_permission",
+    };
+  }
+
+  if (
+    member.id !== guild.ownerId &&
+    me.roles.highest.comparePositionTo(member.roles.highest) <= 0
+  ) {
+    return {
+      created: [],
+      added: [],
+      removed: [],
+      reason: "bot_role_too_low_for_member",
+    };
   }
 
   const entries = getRoleEntries();
@@ -200,14 +230,18 @@ async function syncExclusiveRolesForMember(member, snapshot) {
 
     if (!roleName) continue;
 
-    let role = member.guild.roles.cache.find((r) => r.name === roleName);
+    let role = guild.roles.cache.find((r) => r.name === roleName);
 
     if (shouldHave && !role) {
-      role = await ensureRole(member.guild, roleName);
+      role = await ensureRole(guild, roleName);
       created.push(role.name);
     }
 
     if (!role) continue;
+
+    if (me.roles.highest.comparePositionTo(role) <= 0) {
+      continue;
+    }
 
     const hasRole = member.roles.cache.has(role.id);
 
@@ -222,7 +256,7 @@ async function syncExclusiveRolesForMember(member, snapshot) {
     }
   }
 
-  return { created, added, removed };
+  return { created, added, removed, reason: "ok" };
 }
 
 module.exports = {
