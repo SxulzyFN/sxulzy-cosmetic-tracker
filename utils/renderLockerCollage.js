@@ -29,11 +29,13 @@ function esc(s) {
     .replace(/'/g, "&apos;");
 }
 
-function safeLabel(value) {
-  return String(value || "")
+function cleanText(value) {
+  const cleaned = String(value || "")
     .replace(/[^\x20-\x7E®©’‘“”–—…]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+
+  return cleaned || "Unknown";
 }
 
 async function fetchBuffer(url) {
@@ -65,8 +67,8 @@ function rarityKey(rarityValue) {
 }
 
 function wrapTwoLines(text, maxCharsPerLine = 14) {
-  const clean = safeLabel(text);
-  if (!clean) return ["UNKNOWN", ""];
+  const clean = cleanText(text);
+  if (!clean) return ["Unknown", ""];
 
   const words = clean.split(" ");
   const lines = ["", ""];
@@ -123,7 +125,7 @@ function makeTextSvg({
   align = "left",
   color = "#ffffff",
 }) {
-  const safeText = esc(safeLabel(text));
+  const safeText = esc(cleanText(text));
   const anchor = align === "center" ? "middle" : "start";
   const x = align === "center" ? Math.floor(width / 2) : 0;
 
