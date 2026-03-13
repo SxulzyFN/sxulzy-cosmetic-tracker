@@ -1,41 +1,34 @@
 // commands/commandcosmeticstyles.js
 
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const { SlashCommandBuilder } = require("discord.js");
+const { buildCosmeticStylesEmbed } = require("../utils/cosmeticStatsUI");
+const { getAllLockerSnapshots } = require("../storage");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("cosmeticstyles")
-    .setDescription("List tracked exclusive cosmetic styles"),
+    .setDescription("Show tracked style ownership for a cosmetic")
+    .addStringOption((option) =>
+      option
+        .setName("cosmetic")
+        .setDescription("Cosmetic name or ID")
+        .setRequired(true)
+    ),
 
   async execute(interaction) {
+    await interaction.deferReply();
 
-    const styles = [
-      "Renegade Raider – Black & Gold",
-      "Aerial Assault Trooper – Black & Gold",
-      "Skull Trooper – Purple Glow",
-      "Ghoul Trooper – Pink",
-      "The Paradigm – Reality Warrior",
-      "Aloy – Ice Hunter Aloy",
-      "Master Chief – Matte Black",
-      "Kratos – Armored Kratos",
-      "Marcus Fenix – Matte Black",
-      "Fishstick – World Cup",
-      "Party Trooper – J Balvin",
-      "Party Trooper – Neon",
-      "Billie Eilish – Ultraviolet",
-      "Aerial Assault One – Black & Gold",
-      "Raiders Revenge – Black & Gold",
-      "Bow Blades – Chromatic Carvers",
-      "Ghost Portal – Purple"
-    ];
+    const query = interaction.options.getString("cosmetic", true);
+    const snapshots = (await getAllLockerSnapshots()) || {};
 
-    const embed = new EmbedBuilder()
-      .setColor(0x5865f2)
-      .setTitle("Tracked Exclusive Cosmetic Styles")
-      .setDescription(styles.map(s => `• ${s}`).join("\n"));
+    const embed = await buildCosmeticStylesEmbed({
+      query,
+      snapshots,
+      requestedBy: interaction.user.username,
+    });
 
-    await interaction.reply({
-      embeds: [embed]
+    return interaction.editReply({
+      embeds: [embed],
     });
   },
 };
