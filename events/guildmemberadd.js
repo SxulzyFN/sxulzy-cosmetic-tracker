@@ -1,6 +1,6 @@
 // events/guildMemberAdd.js
 const { Events } = require("discord.js");
-const { getLockerSnapshot } = require("../storage");
+const { getLockerSnapshot } = require("../utils/storage");
 const { syncExclusiveRolesForMember } = require("../utils/exclusiveRoleSync");
 
 module.exports = {
