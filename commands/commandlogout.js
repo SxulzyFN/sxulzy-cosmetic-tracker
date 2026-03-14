@@ -1,6 +1,6 @@
 // commands/commandlogout.js
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
-const { deleteTokens } = require("../storage");
+const { deleteTokens } = require("../utils/storage");
 
 module.exports = {
   data: new SlashCommandBuilder()
