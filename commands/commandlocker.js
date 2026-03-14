@@ -11,6 +11,9 @@ const axios = require("axios");
 const { getLocker, refreshAccessToken } = require("../epic");
 const { getTokens, saveTokens, saveUserLockerSnapshot } = require("../storage");
 
+// --------------------
+// Exact user-requested order
+// --------------------
 const CATEGORY_ORDER = [
   { key: "outfits", label: "Outfits" },
   { key: "backblings", label: "Back Blings" },
@@ -37,6 +40,9 @@ const CATEGORY_ORDER = [
   { key: "lego_building_props", label: "LEGO® Building Props" },
 ];
 
+// --------------------
+// Fallback mapping from locker template prefix
+// --------------------
 const PREFIX_TO_CATEGORY = {
   AthenaCharacter: "outfits",
   AthenaBackpack: "backblings",
@@ -54,6 +60,7 @@ const PREFIX_TO_CATEGORY = {
   AthenaMusicPack: "musics",
   AthenaToy: "toys",
   HomebaseBannerIcon: "banners",
+  HomebaseBannerColor: "banners",
   AthenaBanner: "banners",
   BannerToken: "banners",
 
@@ -76,6 +83,9 @@ const PREFIX_TO_CATEGORY = {
   JunoBuildingProp: "lego_building_props",
 };
 
+// --------------------
+// Primary mapping from Fortnite API cosmetic type
+// --------------------
 const API_TYPE_TO_CATEGORY = {
   outfit: "outfits",
   backpack: "backblings",
@@ -111,23 +121,24 @@ const API_TYPE_TO_CATEGORY = {
   "lego decor": "lego_building_props",
 };
 
-const RARITY_ORDER = {
-  legendary: 0,
-  epic: 1,
-  rare: 2,
-  uncommon: 3,
-  common: 4,
-  icon: 5,
-  marvel: 6,
-  dc: 7,
-  starwars: 8,
-  shadow: 9,
-  slurp: 10,
-  frozen: 11,
-  lava: 12,
-  gaminglegends: 13,
-  mythic: 14,
-};
+const RARITY_ORDER = [
+  "mythic",
+  "exotic",
+  "icon",
+  "marvel",
+  "dc",
+  "starwars",
+  "gaminglegends",
+  "lava",
+  "frozen",
+  "shadow",
+  "slurp",
+  "legendary",
+  "epic",
+  "rare",
+  "uncommon",
+  "common",
+];
 
 let cosmeticsMapCache = null;
 let cosmeticsMapFetchedAt = 0;
@@ -139,6 +150,41 @@ function normalizeId(value) {
 
 function normalizeText(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function normalizeRarityKey(value) {
+  const r = normalizeText(value);
+
+  if (!r) return "common";
+  if (RARITY_ORDER.includes(r)) return r;
+  if (r.includes("gaming")) return "gaminglegends";
+  if (r.includes("marvel")) return "marvel";
+  if (r.includes("dc")) return "dc";
+  if (r.includes("star wars")) return "starwars";
+  if (r.includes("icon")) return "icon";
+  if (r.includes("shadow")) return "shadow";
+  if (r.includes("slurp")) return "slurp";
+  if (r.includes("frozen")) return "frozen";
+  if (r.includes("lava")) return "lava";
+  if (r.includes("mythic")) return "mythic";
+  if (r.includes("exotic")) return "exotic";
+  if (r.includes("legendary")) return "legendary";
+  if (r.includes("epic")) return "epic";
+  if (r.includes("rare")) return "rare";
+  if (r.includes("uncommon")) return "uncommon";
+
+  return "common";
+}
+
+function getRaritySortIndex(value) {
+  const key = normalizeRarityKey(value);
+  const idx = RARITY_ORDER.indexOf(key);
+  return idx === -1 ? RARITY_ORDER.length : idx;
+}
+
+function getLockerCategorySortIndex(categoryKey) {
+  const idx = CATEGORY_ORDER.findIndex((c) => c.key === categoryKey);
+  return idx === -1 ? 999 : idx;
 }
 
 async function getCosmeticsMap() {
@@ -209,28 +255,6 @@ function getCategoryFromApiCosmetic(cosmetic) {
       if (API_TYPE_TO_CATEGORY[raw]) return API_TYPE_TO_CATEGORY[raw];
     }
   }
-
-  return null;
-}
-
-function getCategoryFromPrefix(prefix, idPart = "") {
-  if (PREFIX_TO_CATEGORY[prefix]) return PREFIX_TO_CATEGORY[prefix];
-
-  const p = String(prefix || "").toLowerCase();
-  const id = String(idPart || "").toLowerCase();
-
-  if (p.includes("banner") || id.includes("banner")) return "banners";
-  if (p.includes("emoji")) return "emoticons";
-  if (p.includes("spray")) return "sprays";
-  if (p.includes("music")) return "musics";
-  if (p.includes("shoe")) return "kicks";
-  if (p.includes("contrail") || p.includes("skydive")) return "contrails";
-  if (p.includes("loading")) return "loading_screens";
-  if (p.includes("toy")) return "toys";
-  if (p.includes("guitar") || p.includes("bass") || p.includes("drums") || p.includes("microphone") || p.includes("keytar") || p.includes("keyboard")) {
-    return "jam_instruments";
-  }
-  if (p.includes("song") || p.includes("track")) return "jam_tracks";
 
   return null;
 }
@@ -321,17 +345,15 @@ function buildSnapshotForStats(itemsWithPrefix) {
   return { cosmetics };
 }
 
-function raritySortValue(rarity) {
-  const key = normalizeText(rarity).replace(/\s+/g, "");
-  return Object.prototype.hasOwnProperty.call(RARITY_ORDER, key)
-    ? RARITY_ORDER[key]
-    : 999;
-}
-
-function sortResolvedItems(items) {
+function sortResolvedItemsForRender(items) {
   return [...items].sort((a, b) => {
-    const rarityDiff = raritySortValue(a?.rarity) - raritySortValue(b?.rarity);
+    const rarityDiff =
+      getRaritySortIndex(a?.rarity) - getRaritySortIndex(b?.rarity);
     if (rarityDiff !== 0) return rarityDiff;
+
+    const typeDiff =
+      getLockerCategorySortIndex(a?.category) - getLockerCategorySortIndex(b?.category);
+    if (typeDiff !== 0) return typeDiff;
 
     const aName = String(a?.name || a?.id || "").toLowerCase();
     const bName = String(b?.name || b?.id || "").toLowerCase();
@@ -348,9 +370,35 @@ async function resolveCategories(itemsWithPrefix) {
   for (const item of itemsWithPrefix) {
     const cosmetic = cosmeticsMap.get(normalizeId(item.idPart));
 
-    const categoryKey =
+    let categoryKey =
       getCategoryFromApiCosmetic(cosmetic) ||
-      getCategoryFromPrefix(item.prefix, item.idPart);
+      PREFIX_TO_CATEGORY[item.prefix] ||
+      null;
+
+    if (!categoryKey) {
+      const prefixLower = normalizeText(item.prefix);
+
+      if (prefixLower.includes("banner")) categoryKey = "banners";
+      else if (prefixLower.includes("emoji")) categoryKey = "emoticons";
+      else if (prefixLower.includes("spray")) categoryKey = "sprays";
+      else if (prefixLower.includes("dance")) categoryKey = "emotes";
+      else if (prefixLower.includes("musicpack")) categoryKey = "musics";
+      else if (prefixLower.includes("loadingscreen")) categoryKey = "loading_screens";
+      else if (prefixLower.includes("contrail")) categoryKey = "contrails";
+      else if (prefixLower.includes("toy")) categoryKey = "toys";
+      else if (prefixLower.includes("shoe")) categoryKey = "kicks";
+      else if (prefixLower.includes("sparkssong")) categoryKey = "jam_tracks";
+      else if (
+        prefixLower.includes("sparksguitar") ||
+        prefixLower.includes("sparksbass") ||
+        prefixLower.includes("sparksmicrophone") ||
+        prefixLower.includes("sparksdrums") ||
+        prefixLower.includes("sparkskeyboard") ||
+        prefixLower.includes("sparkskeytar")
+      ) {
+        categoryKey = "jam_instruments";
+      }
+    }
 
     if (!categoryKey) continue;
     if (!resolved[categoryKey]) resolved[categoryKey] = [];
@@ -369,7 +417,7 @@ async function resolveCategories(itemsWithPrefix) {
   }
 
   for (const key of Object.keys(resolved)) {
-    resolved[key] = sortResolvedItems(resolved[key]);
+    resolved[key] = sortResolvedItemsForRender(resolved[key]);
   }
 
   return resolved;
