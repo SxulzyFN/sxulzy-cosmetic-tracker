@@ -20,14 +20,29 @@ let cosmeticIndex = null;
 let cosmeticIndexAt = 0;
 const COSMETIC_CACHE_MS = 1000 * 60 * 60 * 6;
 
+const RARITY_ORDER = {
+  legendary: 5,
+  epic: 4,
+  rare: 3,
+  uncommon: 2,
+  common: 1,
+  unknown: 0,
+};
+
 function normalizeText(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[()]/g, " ")
-    .replace(/&/g, " and ")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return String(value || "").toLowerCase().trim();
+}
+
+function normalizeRarity(value) {
+  const rarity = normalizeText(value);
+
+  if (rarity.includes("legendary")) return "legendary";
+  if (rarity.includes("epic")) return "epic";
+  if (rarity.includes("rare")) return "rare";
+  if (rarity.includes("uncommon")) return "uncommon";
+  if (rarity.includes("common")) return "common";
+
+  return "unknown";
 }
 
 function extractItemsWithPrefix(lockerData) {
@@ -68,25 +83,16 @@ async function getCosmeticIndex() {
     return cosmeticIndex;
   }
 
-  const endpoints = [
-    "https://fortnite-api.com/v2/cosmetics",
-    "https://fortnite-api.com/v2/cosmetics/br",
-  ];
+  const res = await axios.get("https://fortnite-api.com/v2/cosmetics", {
+    timeout: 30000,
+  });
 
+  const data = Array.isArray(res.data?.data) ? res.data.data : [];
   const map = new Map();
 
-  for (const endpoint of endpoints) {
-    try {
-      const res = await axios.get(endpoint, { timeout: 45000 });
-      const data = Array.isArray(res.data?.data) ? res.data.data : [];
-
-      for (const cosmetic of data) {
-        if (!cosmetic?.id) continue;
-        map.set(normalizeId(cosmetic.id), cosmetic);
-      }
-    } catch (error) {
-      console.error(`Failed to load cosmetics from ${endpoint}:`, error.message);
-    }
+  for (const cosmetic of data) {
+    if (!cosmetic?.id) continue;
+    map.set(normalizeId(cosmetic.id), cosmetic);
   }
 
   cosmeticIndex = map;
@@ -95,16 +101,12 @@ async function getCosmeticIndex() {
   return cosmeticIndex;
 }
 
-function getIconUrl(cosmetic, lockerItem = null) {
+function getIconUrl(cosmetic) {
   return (
     cosmetic?.images?.smallIcon ||
     cosmetic?.images?.icon ||
     cosmetic?.images?.featured ||
     cosmetic?.images?.small ||
-    lockerItem?.attributes?.smallIcon ||
-    lockerItem?.attributes?.icon ||
-    lockerItem?.attributes?.featuredIcon ||
-    lockerItem?.attributes?.displayAssetPath ||
     null
   );
 }
@@ -155,6 +157,8 @@ function getVariantBlob(lockerItem) {
 
 function splitKeywords(styleText) {
   return normalizeText(styleText)
+    .replace(/[()]/g, " ")
+    .replace(/&/g, " ")
     .replace(/-/g, " ")
     .split(/\s+/)
     .filter(Boolean);
@@ -162,9 +166,7 @@ function splitKeywords(styleText) {
 
 function styleMatcherHit(lockerItem, cosmetic, matcher) {
   if (!cosmetic?.name) return false;
-  if (normalizeText(cosmetic.name) !== normalizeText(matcher.cosmeticName)) {
-    return false;
-  }
+  if (normalizeText(cosmetic.name) !== normalizeText(matcher.cosmeticName)) return false;
 
   const blob = getVariantBlob(lockerItem);
   if (!blob) return false;
@@ -206,7 +208,7 @@ function getCategoryOrderIndex(category) {
     "banners",
     "contrails",
     "kicks",
-    "instruments",
+    "festival",
     "other",
   ];
 
@@ -298,7 +300,7 @@ module.exports = {
           matched.push({
             id: cosmetic?.id || lockerItem.idPart,
             name: cosmetic?.name || lockerItem.idPart,
-            iconUrl: getIconUrl(cosmetic, lockerItem),
+            iconUrl: getIconUrl(cosmetic),
             rarity: getRarity(cosmetic),
             category: directExclusiveMap.get(itemId) || "other",
             sortName: normalizeText(cosmetic?.name || lockerItem.idPart),
@@ -311,16 +313,14 @@ module.exports = {
       for (const matcher of ALL_EXCLUSIVE_STYLES) {
         if (!styleMatcherHit(lockerItem, cosmetic, matcher)) continue;
 
-        const key = `style:${normalizeText(cosmetic.name)}:${normalizeText(
-          matcher.styleText
-        )}`;
+        const key = `style:${normalizeText(cosmetic.name)}:${normalizeText(matcher.styleText)}`;
         if (seen.has(key)) continue;
         seen.add(key);
 
         matched.push({
           id: `${cosmetic.id}::${matcher.styleText}`,
           name: buildStyleDisplayName(cosmetic.name, matcher.styleText),
-          iconUrl: getIconUrl(cosmetic, lockerItem),
+          iconUrl: getIconUrl(cosmetic),
           rarity: getRarity(cosmetic),
           category: matcher.category || "other",
           sortName: normalizeText(cosmetic.name),
@@ -329,10 +329,18 @@ module.exports = {
     }
 
     matched.sort((a, b) => {
-      const catDiff =
-        getCategoryOrderIndex(a.category) - getCategoryOrderIndex(b.category);
+      const catDiff = getCategoryOrderIndex(a.category) - getCategoryOrderIndex(b.category);
       if (catDiff !== 0) return catDiff;
-      return a.sortName.localeCompare(b.sortName);
+
+      const aRarity = RARITY_ORDER[normalizeRarity(a?.rarity)];
+      const bRarity = RARITY_ORDER[normalizeRarity(b?.rarity)];
+      if (aRarity !== bRarity) return bRarity - aRarity;
+
+      return String(a.sortName || a.name || "").localeCompare(
+        String(b.sortName || b.name || ""),
+        undefined,
+        { sensitivity: "base" }
+      );
     });
 
     const renderable = matched.filter((x) => x.iconUrl);
