@@ -2,7 +2,7 @@
 
 const { SlashCommandBuilder } = require("discord.js");
 const { buildCosmeticStylesEmbed } = require("../utils/cosmeticStatsUI");
-const { getAllLockerSnapshots } = require("../storage");
+const { getAllLockerSnapshots } = require("../utils/storage");
 
 module.exports = {
   data: new SlashCommandBuilder()
