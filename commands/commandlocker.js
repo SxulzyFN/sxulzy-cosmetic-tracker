@@ -9,12 +9,7 @@ const {
 const axios = require("axios");
 
 const { getLocker, refreshAccessToken } = require("../epic");
-const {
-  getTokens,
-  saveTokens,
-  saveUserLockerSnapshot,
-} = require("../storage");
-const { syncExclusiveRolesForMember } = require("../utils/exclusiveRoleSync");
+const { getTokens, saveTokens, saveUserLockerSnapshot } = require("../storage");
 
 // --------------------
 // Exact user-requested order
@@ -32,8 +27,9 @@ const CATEGORY_ORDER = [
   { key: "sidekicks", label: "Sidekicks" },
   { key: "contrails", label: "Contrails" },
   { key: "loading_screens", label: "Loading Screens" },
-  { key: "musics", label: "Music Packs" },
   { key: "toys", label: "Toys" },
+  { key: "banners", label: "Banners" },
+  { key: "musics", label: "Music Packs" },
   { key: "jam_tracks", label: "Jam Tracks" },
   { key: "jam_instruments", label: "Jam Instruments" },
   { key: "car_bodies", label: "Car Bodies" },
@@ -44,6 +40,9 @@ const CATEGORY_ORDER = [
   { key: "lego_building_props", label: "LEGO® Building Props" },
 ];
 
+// --------------------
+// Fallback mapping from locker template prefix
+// --------------------
 const PREFIX_TO_CATEGORY = {
   AthenaCharacter: "outfits",
   AthenaBackpack: "backblings",
@@ -60,6 +59,7 @@ const PREFIX_TO_CATEGORY = {
   AthenaLoadingScreen: "loading_screens",
   AthenaMusicPack: "musics",
   AthenaToy: "toys",
+  HomebaseBannerIcon: "banners",
 
   SparksSong: "jam_tracks",
   SparksMicrophone: "jam_instruments",
@@ -80,6 +80,9 @@ const PREFIX_TO_CATEGORY = {
   JunoBuildingProp: "lego_building_props",
 };
 
+// --------------------
+// Primary mapping from Fortnite API cosmetic type
+// --------------------
 const API_TYPE_TO_CATEGORY = {
   outfit: "outfits",
   backpack: "backblings",
@@ -95,6 +98,8 @@ const API_TYPE_TO_CATEGORY = {
   "loading screen": "loading_screens",
   music: "musics",
   toy: "toys",
+  banner: "banners",
+  "banner icon": "banners",
 
   "jam track": "jam_tracks",
   guitar: "jam_instruments",
@@ -182,10 +187,14 @@ function getCategoryFromApiCosmetic(cosmetic) {
     .map((x) => normalizeText(x));
 
   for (const candidate of typeCandidates) {
-    if (API_TYPE_TO_CATEGORY[candidate]) return API_TYPE_TO_CATEGORY[candidate];
+    if (API_TYPE_TO_CATEGORY[candidate]) {
+      return API_TYPE_TO_CATEGORY[candidate];
+    }
 
     if (candidate.startsWith("cosmetic.itemtype.")) {
-      const raw = candidate.replace("cosmetic.itemtype.", "").replace(/_/g, " ");
+      const raw = candidate
+        .replace("cosmetic.itemtype.", "")
+        .replace(/_/g, " ");
       if (API_TYPE_TO_CATEGORY[raw]) return API_TYPE_TO_CATEGORY[raw];
     }
   }
@@ -296,12 +305,13 @@ async function resolveCategories(itemsWithPrefix) {
   for (const item of itemsWithPrefix) {
     const cosmetic = cosmeticsMap.get(normalizeId(item.idPart));
 
-    const categoryKey =
+    let categoryKey =
       getCategoryFromApiCosmetic(cosmetic) ||
       PREFIX_TO_CATEGORY[item.prefix] ||
       null;
 
     if (!categoryKey) continue;
+    if (!resolved[categoryKey]) resolved[categoryKey] = [];
 
     resolved[categoryKey].push({
       id: cosmetic?.id || item.idPart,
@@ -324,15 +334,13 @@ async function resolveCategories(itemsWithPrefix) {
 }
 
 function buildCategoriesInFixedOrder(resolvedCategories) {
-  return CATEGORY_ORDER
-    .map((c) => ({
-      key: c.key,
-      label: c.label,
-      count: Array.isArray(resolvedCategories[c.key])
-        ? resolvedCategories[c.key].length
-        : 0,
-    }))
-    .filter((c) => c.count > 0);
+  return CATEGORY_ORDER.map((c) => ({
+    key: c.key,
+    label: c.label,
+    count: Array.isArray(resolvedCategories[c.key])
+      ? resolvedCategories[c.key].length
+      : 0,
+  })).filter((c) => c.count > 0);
 }
 
 function buildCategoryPicker(discordUserId, categories, page = 0) {
@@ -443,9 +451,7 @@ module.exports = {
             e2?.response?.data?.error ||
             e2.message;
 
-          return interaction.editReply(
-            `❌ Error fetching locker after refresh: ${msg2}`
-          );
+          return interaction.editReply(`❌ Error fetching locker after refresh: ${msg2}`);
         }
       } else {
         return interaction.editReply(`❌ Error fetching locker: ${msg}`);
@@ -455,28 +461,6 @@ module.exports = {
     const itemsWithPrefix = extractItemsWithPrefix(lockerData);
     const snapshot = buildSnapshotForStats(itemsWithPrefix);
     await saveUserLockerSnapshot(discordId, snapshot);
-
-    if (interaction.guild) {
-      try {
-        const member = await interaction.guild.members.fetch(interaction.user.id);
-        const syncResult = await syncExclusiveRolesForMember(member, snapshot);
-
-        console.log("Role sync result:", {
-          user: interaction.user.tag,
-          userId: interaction.user.id,
-          guildId: interaction.guild.id,
-          created: syncResult.created?.length || 0,
-          added: syncResult.added?.length || 0,
-          removed: syncResult.removed?.length || 0,
-          reason: syncResult.reason || "unknown",
-          createdRoles: syncResult.created || [],
-          addedRoles: syncResult.added || [],
-          removedRoles: syncResult.removed || [],
-        });
-      } catch (err) {
-        console.error("Role sync failed:", err);
-      }
-    }
 
     const resolvedCategories = await resolveCategories(itemsWithPrefix);
     const categories = buildCategoriesInFixedOrder(resolvedCategories);
@@ -494,9 +478,7 @@ module.exports = {
       const embed = new EmbedBuilder()
         .setColor(0x2ecc71)
         .setTitle("✅ Locker Updated")
-        .setDescription(
-          "Your locker was fetched, but no supported locker categories were found."
-        );
+        .setDescription("Your locker was fetched, but no supported locker categories were found.");
 
       return interaction.editReply({ embeds: [embed] });
     }
