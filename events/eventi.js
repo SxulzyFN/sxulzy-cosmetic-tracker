@@ -28,8 +28,9 @@ const CATEGORY_META = {
   wraps: { label: "Wraps" },
   loading_screens: { label: "Loading Screens" },
   contrails: { label: "Contrails" },
-  musics: { label: "Music Packs" },
   toys: { label: "Toys" },
+  banners: { label: "Banners" },
+  musics: { label: "Music Packs" },
   kicks: { label: "Kicks" },
   sidekicks: { label: "Sidekicks" },
   jam_tracks: { label: "Jam Tracks" },
@@ -99,9 +100,6 @@ module.exports = {
 
   async execute(interaction) {
     try {
-      // -----------------------------
-      // Slash commands
-      // -----------------------------
       if (interaction.isChatInputCommand()) {
         const command = interaction.client.commands.get(interaction.commandName);
         if (!command) return;
@@ -109,9 +107,6 @@ module.exports = {
         return await command.execute(interaction);
       }
 
-      // -----------------------------
-      // Buttons
-      // -----------------------------
       if (interaction.isButton()) {
         if (interaction.customId === "enter_auth_code") {
           const modal = new ModalBuilder()
@@ -211,9 +206,6 @@ module.exports = {
         return;
       }
 
-      // -----------------------------
-      // Modal submit
-      // -----------------------------
       if (interaction.isModalSubmit()) {
         if (interaction.customId === "auth_code_modal") {
           await interaction.deferReply({ ephemeral: true });
