@@ -20,71 +20,22 @@ const RARITY_BG = {
   gaminglegends: { r: 120, g: 85, b: 255, alpha: 1 },
 };
 
-const FONT_5X7 = {
-  A: ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
-  B: ["11110", "10001", "10001", "11110", "10001", "10001", "11110"],
-  C: ["01111", "10000", "10000", "10000", "10000", "10000", "01111"],
-  D: ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
-  E: ["11111", "10000", "10000", "11110", "10000", "10000", "11111"],
-  F: ["11111", "10000", "10000", "11110", "10000", "10000", "10000"],
-  G: ["01111", "10000", "10000", "10011", "10001", "10001", "01110"],
-  H: ["10001", "10001", "10001", "11111", "10001", "10001", "10001"],
-  I: ["11111", "00100", "00100", "00100", "00100", "00100", "11111"],
-  J: ["00111", "00010", "00010", "00010", "00010", "10010", "01100"],
-  K: ["10001", "10010", "10100", "11000", "10100", "10010", "10001"],
-  L: ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
-  M: ["10001", "11011", "10101", "10101", "10001", "10001", "10001"],
-  N: ["10001", "11001", "10101", "10011", "10001", "10001", "10001"],
-  O: ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
-  P: ["11110", "10001", "10001", "11110", "10000", "10000", "10000"],
-  Q: ["01110", "10001", "10001", "10001", "10101", "10010", "01101"],
-  R: ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
-  S: ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
-  T: ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
-  U: ["10001", "10001", "10001", "10001", "10001", "10001", "01110"],
-  V: ["10001", "10001", "10001", "10001", "10001", "01010", "00100"],
-  W: ["10001", "10001", "10001", "10101", "10101", "10101", "01010"],
-  X: ["10001", "10001", "01010", "00100", "01010", "10001", "10001"],
-  Y: ["10001", "10001", "01010", "00100", "00100", "00100", "00100"],
-  Z: ["11111", "00001", "00010", "00100", "01000", "10000", "11111"],
-  0: ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
-  1: ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
-  2: ["01110", "10001", "00001", "00010", "00100", "01000", "11111"],
-  3: ["11110", "00001", "00001", "01110", "00001", "00001", "11110"],
-  4: ["00010", "00110", "01010", "10010", "11111", "00010", "00010"],
-  5: ["11111", "10000", "10000", "11110", "00001", "00001", "11110"],
-  6: ["01110", "10000", "10000", "11110", "10001", "10001", "01110"],
-  7: ["11111", "00001", "00010", "00100", "01000", "01000", "01000"],
-  8: ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
-  9: ["01110", "10001", "10001", "01111", "00001", "00001", "01110"],
-  " ": ["00000", "00000", "00000", "00000", "00000", "00000", "00000"],
-  "-": ["00000", "00000", "00000", "11111", "00000", "00000", "00000"],
-  "_": ["00000", "00000", "00000", "00000", "00000", "00000", "11111"],
-  ".": ["00000", "00000", "00000", "00000", "00000", "01100", "01100"],
-  ",": ["00000", "00000", "00000", "00000", "00110", "00110", "01100"],
-  "'": ["00100", "00100", "00100", "00000", "00000", "00000", "00000"],
-  ":": ["00000", "01100", "01100", "00000", "01100", "01100", "00000"],
-  "/": ["00001", "00010", "00100", "01000", "10000", "00000", "00000"],
-  "(": ["00010", "00100", "01000", "01000", "01000", "00100", "00010"],
-  ")": ["01000", "00100", "00010", "00010", "00010", "00100", "01000"],
-  "&": ["00100", "01010", "00100", "01011", "10010", "10010", "01101"],
-  "!": ["00100", "00100", "00100", "00100", "00100", "00000", "00100"],
-  "?": ["01110", "10001", "00001", "00010", "00100", "00000", "00100"],
-};
+function esc(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
 
 function cleanText(value) {
-  return (
-    String(value || "")
-      .replace(/[\u2018\u2019]/g, "'")
-      .replace(/[\u201C\u201D]/g, '"')
-      .replace(/[\u2013\u2014]/g, "-")
-      .replace(/\u2026/g, "...")
-      .replace(/\u00AE/g, "(R)")
-      .replace(/\u00A9/g, "(C)")
-      .replace(/[^\x20-\x7E]/g, "")
-      .replace(/\s+/g, " ")
-      .trim() || "Unknown"
-  );
+  const cleaned = String(value || "")
+    .replace(/[^\x20-\x7E®©’‘“”–—…]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleaned || "Unknown";
 }
 
 async function fetchBuffer(url) {
@@ -136,17 +87,19 @@ function wrapTwoLines(text, maxCharsPerLine = 14) {
       lines[line] =
         w.length <= maxCharsPerLine
           ? w
-          : `${w.slice(0, Math.max(1, maxCharsPerLine - 3))}...`;
+          : `${w.slice(0, Math.max(1, maxCharsPerLine - 1))}…`;
       continue;
     }
 
-    const current = lines[1] || "";
-    const merged = current ? `${current} ${w}` : w;
-    lines[1] =
-      merged.length <= maxCharsPerLine
-        ? merged
-        : `${merged.slice(0, Math.max(1, maxCharsPerLine - 3))}...`;
+    const base = lines[1] || "";
+    lines[1] = !base
+      ? `${w.slice(0, Math.max(1, maxCharsPerLine - 1))}…`
+      : `${base.slice(0, Math.max(1, maxCharsPerLine - 1))}…`;
     return lines;
+  }
+
+  if (lines[1].length > maxCharsPerLine) {
+    lines[1] = `${lines[1].slice(0, Math.max(1, maxCharsPerLine - 1))}…`;
   }
 
   return lines;
@@ -163,59 +116,30 @@ function chooseColumnCount(itemCount) {
   return Math.max(8, Math.min(14, itemCount || 8));
 }
 
-function bitmapTextSvg(text, options = {}) {
-  const {
-    scale = 2,
-    color = "#ffffff",
-    center = false,
-    width = null,
-    letterSpacing = 1,
-    lineHeight = 2,
-  } = options;
-
-  const lines = cleanText(text).toUpperCase().split("\n");
-  const charW = 5 * scale;
-  const charH = 7 * scale;
-  const gap = letterSpacing * scale;
-
-  const lineWidths = lines.map((line) =>
-    Math.max(0, line.length * charW + Math.max(0, line.length - 1) * gap)
-  );
-
-  const svgWidth = width || Math.max(1, ...lineWidths);
-  const svgHeight =
-    lines.length * charH + Math.max(0, lines.length - 1) * lineHeight * scale;
-
-  const rects = [];
-
-  lines.forEach((line, lineIndex) => {
-    const chars = line.split("");
-    const fullLineWidth =
-      chars.length * charW + Math.max(0, chars.length - 1) * gap;
-
-    let xCursor = center ? Math.floor((svgWidth - fullLineWidth) / 2) : 0;
-    const yBase = lineIndex * (charH + lineHeight * scale);
-
-    for (const ch of chars) {
-      const glyph = FONT_5X7[ch] || FONT_5X7["?"];
-
-      for (let y = 0; y < glyph.length; y++) {
-        for (let x = 0; x < glyph[y].length; x++) {
-          if (glyph[y][x] === "1") {
-            rects.push(
-              `<rect x="${xCursor + x * scale}" y="${yBase + y * scale}" width="${scale}" height="${scale}" fill="${color}"/>`
-            );
-          }
-        }
-      }
-
-      xCursor += charW + gap;
-    }
-  });
+function makeTextSvg({
+  width,
+  height,
+  text,
+  fontSize = 12,
+  weight = 700,
+  align = "left",
+  color = "#ffffff",
+}) {
+  const safeText = esc(cleanText(text));
+  const anchor = align === "center" ? "middle" : "start";
+  const x = align === "center" ? Math.floor(width / 2) : 0;
 
   return Buffer.from(`
-    <svg width="${svgWidth}" height="${svgHeight}" xmlns="http://www.w3.org/2000/svg">
-      ${rects.join("")}
+    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+      <style>
+        text {
+          fill: ${color};
+          font-size: ${fontSize}px;
+          font-weight: ${weight};
+          font-family: DejaVu Sans, Arial, sans-serif;
+        }
+      </style>
+      <text x="${x}" y="${Math.floor(height * 0.8)}" text-anchor="${anchor}">${safeText}</text>
     </svg>
   `);
 }
@@ -223,7 +147,7 @@ function bitmapTextSvg(text, options = {}) {
 async function renderLockerCollage({ username, categoryTitle, title, items }) {
   const resolvedTitle = String(categoryTitle || title || "Locker");
   const resolvedUsername = String(username || "Unknown");
-  const safe = (items || []).filter((i) => i && i.iconUrl).slice(0, 1500);
+  const safe = (items || []).filter(Boolean).slice(0, 1500);
 
   const ICON = 92;
   const TEXT_H = 24;
@@ -264,31 +188,40 @@ async function renderLockerCollage({ username, categoryTitle, title, items }) {
   });
 
   const cardSvg = Buffer.from(`
-    <svg width="${width}" height="${height}">
+    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
       <rect x="${OUTER_PAD}" y="${OUTER_PAD}" width="${cardW}" height="${cardH}" rx="28" ry="28" fill="#12121c"/>
       <rect x="${OUTER_PAD}" y="${OUTER_PAD}" width="8" height="${cardH}" rx="4" ry="4" fill="#5b6cff"/>
       <rect x="${gridLeft - 10}" y="${gridTop - 10}" width="${gridW + 20}" height="${gridH + 20}" rx="${GRID_BG_RADIUS}" ry="${GRID_BG_RADIUS}" fill="#050505"/>
     </svg>
   `);
 
-  const titleBuf = bitmapTextSvg(`${resolvedTitle} (${safe.length})`, {
-    scale: 4,
-    color: "#ffffff",
+  const titleBuf = makeTextSvg({
+    width: cardW - 60,
+    height: 44,
+    text: `${resolvedTitle} (${safe.length})`,
+    fontSize: 32,
+    weight: 800,
+    align: "left",
   });
 
-  const submittedBuf = bitmapTextSvg(`SUBMITTED BY ${resolvedUsername}`, {
-    scale: 2,
-    color: "#ffffff",
+  const submittedBuf = makeTextSvg({
+    width: cardW - 60,
+    height: 24,
+    text: `Submitted by ${resolvedUsername}`,
+    fontSize: 18,
+    weight: 700,
+    align: "left",
   });
 
   img = img.composite([
     { input: cardSvg, left: 0, top: 0 },
-    { input: titleBuf, left: OUTER_PAD + 38, top: OUTER_PAD + 26 },
-    { input: submittedBuf, left: OUTER_PAD + 38, top: height - OUTER_PAD - 32 },
+    { input: titleBuf, left: OUTER_PAD + 38, top: OUTER_PAD + 18 },
+    { input: submittedBuf, left: OUTER_PAD + 38, top: height - OUTER_PAD - 34 },
   ]);
 
   const iconBuffers = await Promise.all(
     safe.map(async (it) => {
+      if (!it?.iconUrl) return null;
       try {
         return await fetchBuffer(it.iconUrl);
       } catch {
@@ -347,26 +280,35 @@ async function renderLockerCollage({ username, categoryTitle, title, items }) {
       } catch {}
     }
 
-    const displayName = cleanText(
+    const displayName =
       safe[i].name ||
-        safe[i].id ||
-        safe[i].idPart ||
-        safe[i].cosmeticId ||
-        "Unknown"
-    );
+      safe[i].id ||
+      safe[i].idPart ||
+      safe[i].cosmeticId ||
+      "Unknown";
 
     const [l1, l2] = wrapTwoLines(displayName, 14);
 
-    const labelSvg = bitmapTextSvg(`${l1}\n${l2}`, {
-      scale: 1,
-      color: "#ffffff",
-      center: true,
+    const label1 = makeTextSvg({
       width: TILE_W,
-      lineHeight: 1,
-      letterSpacing: 1,
+      height: 10,
+      text: l1,
+      fontSize: 10,
+      weight: 800,
+      align: "center",
     });
 
-    composites.push({ input: labelSvg, left, top: top + ICON + 4 });
+    const label2 = makeTextSvg({
+      width: TILE_W,
+      height: 10,
+      text: l2,
+      fontSize: 10,
+      weight: 800,
+      align: "center",
+    });
+
+    composites.push({ input: label1, left, top: top + ICON + 1 });
+    composites.push({ input: label2, left, top: top + ICON + 12 });
   }
 
   img = img.composite(composites);
