@@ -1,7 +1,7 @@
 // events/messageCreate.js - Listens for !code messages
 const { Events, EmbedBuilder } = require('discord.js');
-const { getAccessToken } = require('../epic');
-const { saveTokens } = require('../storage');
+const { getAccessToken } = require('../services/epic');
+const { saveTokens } = require('../utils/storage');
 
 module.exports = {
     name: Events.MessageCreate,
