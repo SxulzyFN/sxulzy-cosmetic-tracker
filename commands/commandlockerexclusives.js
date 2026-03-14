@@ -34,14 +34,12 @@ function normalizeText(value) {
 }
 
 function normalizeRarity(value) {
-  const rarity = normalizeText(value);
-
-  if (rarity.includes("legendary")) return "legendary";
-  if (rarity.includes("epic")) return "epic";
-  if (rarity.includes("rare")) return "rare";
-  if (rarity.includes("uncommon")) return "uncommon";
-  if (rarity.includes("common")) return "common";
-
+  const r = normalizeText(value);
+  if (r.includes("legendary")) return "legendary";
+  if (r.includes("epic")) return "epic";
+  if (r.includes("rare")) return "rare";
+  if (r.includes("uncommon")) return "uncommon";
+  if (r.includes("common")) return "common";
   return "unknown";
 }
 
@@ -181,41 +179,6 @@ function buildStyleDisplayName(cosmeticName, styleText) {
   return `${cosmeticName} (${styleText})`;
 }
 
-function buildDirectExclusiveMap() {
-  const directMap = new Map();
-
-  for (const [category, ids] of Object.entries(ALL_EXCLUSIVE_ITEMS)) {
-    for (const id of ids) {
-      directMap.set(normalizeId(id), category);
-    }
-  }
-
-  return directMap;
-}
-
-function getCategoryOrderIndex(category) {
-  const order = [
-    "skins",
-    "backblings",
-    "pickaxes",
-    "gliders",
-    "wraps",
-    "emotes",
-    "sprays",
-    "emoticons",
-    "musicPacks",
-    "loadingScreens",
-    "banners",
-    "contrails",
-    "kicks",
-    "festival",
-    "other",
-  ];
-
-  const idx = order.indexOf(category);
-  return idx === -1 ? 999 : idx;
-}
-
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("lockerexclusives")
@@ -281,9 +244,7 @@ module.exports = {
 
     const lockerItems = extractItemsWithPrefix(lockerData);
     const cosmeticsById = await getCosmeticIndex();
-
     const fullExclusiveIdSet = flattenAllExclusiveIds();
-    const directExclusiveMap = buildDirectExclusiveMap();
 
     const matched = [];
     const seen = new Set();
@@ -302,7 +263,6 @@ module.exports = {
             name: cosmetic?.name || lockerItem.idPart,
             iconUrl: getIconUrl(cosmetic),
             rarity: getRarity(cosmetic),
-            category: directExclusiveMap.get(itemId) || "other",
             sortName: normalizeText(cosmetic?.name || lockerItem.idPart),
           });
         }
@@ -322,19 +282,18 @@ module.exports = {
           name: buildStyleDisplayName(cosmetic.name, matcher.styleText),
           iconUrl: getIconUrl(cosmetic),
           rarity: getRarity(cosmetic),
-          category: matcher.category || "other",
           sortName: normalizeText(cosmetic.name),
         });
       }
     }
 
     matched.sort((a, b) => {
-      const catDiff = getCategoryOrderIndex(a.category) - getCategoryOrderIndex(b.category);
-      if (catDiff !== 0) return catDiff;
-
       const aRarity = RARITY_ORDER[normalizeRarity(a?.rarity)];
       const bRarity = RARITY_ORDER[normalizeRarity(b?.rarity)];
-      if (aRarity !== bRarity) return bRarity - aRarity;
+
+      if (aRarity !== bRarity) {
+        return bRarity - aRarity;
+      }
 
       return String(a.sortName || a.name || "").localeCompare(
         String(b.sortName || b.name || ""),
