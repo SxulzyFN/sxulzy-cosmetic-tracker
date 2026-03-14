@@ -147,7 +147,7 @@ function makeTextSvg({
 async function renderLockerCollage({ username, categoryTitle, title, items }) {
   const resolvedTitle = String(categoryTitle || title || "Locker");
   const resolvedUsername = String(username || "Unknown");
-  const safe = (items || []).filter((i) => i && i.iconUrl).slice(0, 1500);
+  const safe = (items || []).filter(Boolean).slice(0, 1500);
 
   const ICON = 92;
   const TEXT_H = 24;
@@ -221,6 +221,7 @@ async function renderLockerCollage({ username, categoryTitle, title, items }) {
 
   const iconBuffers = await Promise.all(
     safe.map(async (it) => {
+      if (!it?.iconUrl) return null;
       try {
         return await fetchBuffer(it.iconUrl);
       } catch {
