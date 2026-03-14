@@ -55,19 +55,18 @@ const PREFIX_TO_CATEGORY = {
   AthenaLoadingScreen: "loading_screens",
   AthenaMusicPack: "musics",
   AthenaToy: "toys",
-
   HomebaseBannerIcon: "banners",
   HomebaseBannerColor: "banners",
   AthenaBanner: "banners",
   AthenaBannerIcon: "banners",
 
   SparksSong: "jam_tracks",
-  SparksMicrophone: "jam_instruments",
   SparksGuitar: "jam_instruments",
   SparksBass: "jam_instruments",
-  SparksKeytar: "jam_instruments",
   SparksDrums: "jam_instruments",
+  SparksMicrophone: "jam_instruments",
   SparksKeyboard: "jam_instruments",
+  SparksKeytar: "jam_instruments",
 
   VehicleCosmetics_Body: "car_bodies",
   VehicleCosmetics_Skin: "car_bodies",
@@ -107,8 +106,8 @@ const API_TYPE_TO_CATEGORY = {
   drums: "jam_instruments",
   microphone: "jam_instruments",
   mic: "jam_instruments",
-  keytar: "jam_instruments",
   keyboard: "jam_instruments",
+  keytar: "jam_instruments",
 
   "car body": "car_bodies",
   wheel: "car_wheels",
@@ -152,6 +151,7 @@ function normalizeText(value) {
 
 function normalizeRarity(value) {
   const r = normalizeText(value);
+
   if (RARITY_ORDER[r] != null) return r;
   if (r.includes("legendary")) return "legendary";
   if (r.includes("epic")) return "epic";
@@ -168,12 +168,12 @@ function normalizeRarity(value) {
   if (r.includes("lava")) return "lava";
   if (r.includes("slurp")) return "slurp";
   if (r.includes("gaming")) return "gaminglegends";
+
   return "common";
 }
 
 function rarityRank(value) {
-  const key = normalizeRarity(value);
-  return RARITY_ORDER[key] ?? 999;
+  return RARITY_ORDER[normalizeRarity(value)] ?? 999;
 }
 
 async function getCosmeticsMap() {
@@ -197,6 +197,7 @@ async function getCosmeticsMap() {
 
   cosmeticsMapCache = map;
   cosmeticsMapFetchedAt = now;
+
   return map;
 }
 
@@ -254,9 +255,10 @@ function getCategoryFromPrefix(prefix = "") {
   const lower = normalizeText(prefix);
 
   if (lower.includes("banner")) return "banners";
-  if (lower.includes("emoji") || lower.includes("emoticon")) return "emoticons";
+  if (lower.includes("emoticon") || lower.includes("emoji")) return "emoticons";
   if (lower.includes("spray")) return "sprays";
   if (lower.includes("song")) return "jam_tracks";
+
   if (
     lower.includes("guitar") ||
     lower.includes("bass") ||
@@ -377,13 +379,11 @@ async function resolveCategories(itemsWithPrefix) {
   for (const item of itemsWithPrefix) {
     const cosmetic = cosmeticsMap.get(normalizeId(item.idPart));
 
-    let categoryKey =
+    const categoryKey =
       getCategoryFromApiCosmetic(cosmetic) ||
-      getCategoryFromPrefix(item.prefix) ||
-      null;
+      getCategoryFromPrefix(item.prefix);
 
     if (!categoryKey) continue;
-    if (!resolved[categoryKey]) resolved[categoryKey] = [];
 
     resolved[categoryKey].push({
       id: cosmetic?.id || item.idPart,
