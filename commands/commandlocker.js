@@ -59,9 +59,13 @@ const PREFIX_TO_CATEGORY = {
   AthenaLoadingScreen: "loading_screens",
   AthenaMusicPack: "musics",
   AthenaToy: "toys",
+
+  // banner support
   HomebaseBannerIcon: "banners",
   HomebaseBannerColor: "banners",
   AthenaBanner: "banners",
+  BannerToken: "banners",
+  CosmeticBanner: "banners",
 
   SparksSong: "jam_tracks",
   SparksMicrophone: "jam_instruments",
@@ -102,6 +106,7 @@ const API_TYPE_TO_CATEGORY = {
   toy: "toys",
   banner: "banners",
   "banner icon": "banners",
+  "banner token": "banners",
 
   "jam track": "jam_tracks",
   guitar: "jam_instruments",
@@ -142,14 +147,12 @@ function normalizeText(value) {
 }
 
 function normalizeRarity(value) {
-  const rarity = normalizeText(value);
-
-  if (rarity.includes("legendary")) return "legendary";
-  if (rarity.includes("epic")) return "epic";
-  if (rarity.includes("rare")) return "rare";
-  if (rarity.includes("uncommon")) return "uncommon";
-  if (rarity.includes("common")) return "common";
-
+  const r = normalizeText(value);
+  if (r.includes("legendary")) return "legendary";
+  if (r.includes("epic")) return "epic";
+  if (r.includes("rare")) return "rare";
+  if (r.includes("uncommon")) return "uncommon";
+  if (r.includes("common")) return "common";
   return "unknown";
 }
 
@@ -160,7 +163,7 @@ async function getCosmeticsMap() {
     return cosmeticsMapCache;
   }
 
-  // Use full cosmetics endpoint so banner and non-BR style items resolve more reliably
+  // broader endpoint for banner + non-BR cosmetic coverage
   const res = await axios.get("https://fortnite-api.com/v2/cosmetics", {
     timeout: 30000,
   });
