@@ -20,7 +20,26 @@ let cosmeticIndex = null;
 let cosmeticIndexAt = 0;
 const COSMETIC_CACHE_MS = 1000 * 60 * 60 * 6;
 
-const CATEGORY_ORDER = [
+const RARITY_ORDER = [
+  "mythic",
+  "exotic",
+  "icon",
+  "marvel",
+  "dc",
+  "starwars",
+  "gaminglegends",
+  "lava",
+  "frozen",
+  "shadow",
+  "slurp",
+  "legendary",
+  "epic",
+  "rare",
+  "uncommon",
+  "common",
+];
+
+const EXCLUSIVE_CATEGORY_ORDER = [
   "skins",
   "backblings",
   "pickaxes",
@@ -30,35 +49,62 @@ const CATEGORY_ORDER = [
   "sprays",
   "wraps",
   "kicks",
-  "musicPacks",
-  "loadingScreens",
-  "banners",
+  "sidekicks",
   "contrails",
-  "jamInstruments",
+  "loadingScreens",
+  "toys",
+  "banners",
+  "musicPacks",
   "jamTracks",
+  "jamInstruments",
+  "carBodies",
+  "carWheels",
+  "carBoosts",
+  "driftSmokes",
+  "legoBuildingSets",
+  "legoBuildingProps",
+  "rocketRacing",
+  "festival",
   "other",
 ];
 
-const RARITY_ORDER = {
-  legendary: 0,
-  epic: 1,
-  rare: 2,
-  uncommon: 3,
-  common: 4,
-  icon: 5,
-  marvel: 6,
-  dc: 7,
-  starwars: 8,
-  shadow: 9,
-  slurp: 10,
-  frozen: 11,
-  lava: 12,
-  gaminglegends: 13,
-  mythic: 14,
-};
-
 function normalizeText(value) {
   return String(value || "").toLowerCase().trim();
+}
+
+function normalizeRarityKey(value) {
+  const r = normalizeText(value);
+
+  if (!r) return "common";
+  if (RARITY_ORDER.includes(r)) return r;
+  if (r.includes("gaming")) return "gaminglegends";
+  if (r.includes("marvel")) return "marvel";
+  if (r.includes("dc")) return "dc";
+  if (r.includes("star wars")) return "starwars";
+  if (r.includes("icon")) return "icon";
+  if (r.includes("shadow")) return "shadow";
+  if (r.includes("slurp")) return "slurp";
+  if (r.includes("frozen")) return "frozen";
+  if (r.includes("lava")) return "lava";
+  if (r.includes("mythic")) return "mythic";
+  if (r.includes("exotic")) return "exotic";
+  if (r.includes("legendary")) return "legendary";
+  if (r.includes("epic")) return "epic";
+  if (r.includes("rare")) return "rare";
+  if (r.includes("uncommon")) return "uncommon";
+
+  return "common";
+}
+
+function getRaritySortIndex(value) {
+  const key = normalizeRarityKey(value);
+  const idx = RARITY_ORDER.indexOf(key);
+  return idx === -1 ? RARITY_ORDER.length : idx;
+}
+
+function getExclusiveCategorySortIndex(category) {
+  const idx = EXCLUSIVE_CATEGORY_ORDER.indexOf(category);
+  return idx === -1 ? 999 : idx;
 }
 
 function extractItemsWithPrefix(lockerData) {
@@ -133,6 +179,8 @@ function getRarity(cosmetic) {
     cosmetic?.series?.id ||
     cosmetic?.rarity?.value ||
     cosmetic?.rarity?.id ||
+    cosmetic?.series?.name ||
+    cosmetic?.rarity?.name ||
     "common"
   );
 }
@@ -207,16 +255,21 @@ function buildDirectExclusiveMap() {
   return directMap;
 }
 
-function getCategoryOrderIndex(category) {
-  const idx = CATEGORY_ORDER.indexOf(category);
-  return idx === -1 ? 999 : idx;
-}
+function sortMatchedItems(items) {
+  return [...items].sort((a, b) => {
+    const rarityDiff =
+      getRaritySortIndex(a?.rarity) - getRaritySortIndex(b?.rarity);
+    if (rarityDiff !== 0) return rarityDiff;
 
-function raritySortValue(rarity) {
-  const key = normalizeText(rarity).replace(/\s+/g, "");
-  return Object.prototype.hasOwnProperty.call(RARITY_ORDER, key)
-    ? RARITY_ORDER[key]
-    : 999;
+    const typeDiff =
+      getExclusiveCategorySortIndex(a?.category) -
+      getExclusiveCategorySortIndex(b?.category);
+    if (typeDiff !== 0) return typeDiff;
+
+    const aName = String(a?.sortName || a?.name || a?.id || "").toLowerCase();
+    const bName = String(b?.sortName || b?.name || b?.id || "").toLowerCase();
+    return aName.localeCompare(bName);
+  });
 }
 
 module.exports = {
@@ -307,6 +360,8 @@ module.exports = {
             rarity: getRarity(cosmetic),
             category: directExclusiveMap.get(itemId) || "other",
             sortName: normalizeText(cosmetic?.name || lockerItem.idPart),
+            prefix: lockerItem.prefix,
+            idPart: lockerItem.idPart,
           });
         }
       }
@@ -327,21 +382,16 @@ module.exports = {
           rarity: getRarity(cosmetic),
           category: matcher.category || "other",
           sortName: normalizeText(cosmetic.name),
+          prefix: lockerItem.prefix,
+          idPart: lockerItem.idPart,
         });
       }
     }
 
-    matched.sort((a, b) => {
-      const rarityDiff = raritySortValue(a.rarity) - raritySortValue(b.rarity);
-      if (rarityDiff !== 0) return rarityDiff;
+    const sortedMatched = sortMatchedItems(matched);
+    const renderable = sortedMatched.filter((x) => x.iconUrl);
 
-      const catDiff = getCategoryOrderIndex(a.category) - getCategoryOrderIndex(b.category);
-      if (catDiff !== 0) return catDiff;
-
-      return a.sortName.localeCompare(b.sortName);
-    });
-
-    if (!matched.length) {
+    if (!renderable.length) {
       const embed = new EmbedBuilder()
         .setColor(0xffcc00)
         .setTitle("No exclusive + unique cosmetics found")
@@ -355,7 +405,7 @@ module.exports = {
     const buffer = await renderExclusivesCollage({
       username: interaction.user.username,
       categoryTitle: "Exclusive + Uniques",
-      items: matched,
+      items: renderable,
     });
 
     const attachment = new AttachmentBuilder(buffer, {
@@ -364,7 +414,7 @@ module.exports = {
 
     const embed = new EmbedBuilder()
       .setColor(0x5865f2)
-      .setTitle(`Exclusive + Uniques (${matched.length})`)
+      .setTitle(`Exclusive + Uniques (${renderable.length})`)
       .setImage("attachment://locker-exclusive-uniques.png");
 
     return interaction.editReply({
