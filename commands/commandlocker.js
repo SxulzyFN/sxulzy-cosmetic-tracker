@@ -44,9 +44,7 @@ const PREFIX_TO_CATEGORY = {
   AthenaGlider: "gliders",
   AthenaDance: "emotes",
   AthenaEmoji: "emoticons",
-  AthenaEmoticon: "emoticons",
   AthenaSpray: "sprays",
-  AthenaSprayDecal: "sprays",
   AthenaItemWrap: "wraps",
   CosmeticShoes: "kicks",
   AthenaPet: "sidekicks",
@@ -56,17 +54,16 @@ const PREFIX_TO_CATEGORY = {
   AthenaMusicPack: "musics",
   AthenaToy: "toys",
   HomebaseBannerIcon: "banners",
-  HomebaseBannerColor: "banners",
   AthenaBanner: "banners",
-  AthenaBannerIcon: "banners",
+  BannerToken: "banners",
 
   SparksSong: "jam_tracks",
+  SparksMicrophone: "jam_instruments",
   SparksGuitar: "jam_instruments",
   SparksBass: "jam_instruments",
-  SparksDrums: "jam_instruments",
-  SparksMicrophone: "jam_instruments",
-  SparksKeyboard: "jam_instruments",
   SparksKeytar: "jam_instruments",
+  SparksDrums: "jam_instruments",
+  SparksKeyboard: "jam_instruments",
 
   VehicleCosmetics_Body: "car_bodies",
   VehicleCosmetics_Skin: "car_bodies",
@@ -86,16 +83,13 @@ const API_TYPE_TO_CATEGORY = {
   glider: "gliders",
   emote: "emotes",
   emoji: "emoticons",
-  emoticon: "emoticons",
   spray: "sprays",
   wrap: "wraps",
   shoes: "kicks",
   pet: "sidekicks",
   contrail: "contrails",
   "loading screen": "loading_screens",
-  loadingscreen: "loading_screens",
   music: "musics",
-  "music pack": "musics",
   toy: "toys",
   banner: "banners",
   "banner icon": "banners",
@@ -105,9 +99,8 @@ const API_TYPE_TO_CATEGORY = {
   bass: "jam_instruments",
   drums: "jam_instruments",
   microphone: "jam_instruments",
-  mic: "jam_instruments",
-  keyboard: "jam_instruments",
   keytar: "jam_instruments",
+  keyboard: "jam_instruments",
 
   "car body": "car_bodies",
   wheel: "car_wheels",
@@ -124,17 +117,16 @@ const RARITY_ORDER = {
   rare: 2,
   uncommon: 3,
   common: 4,
-  mythic: 5,
-  exotic: 6,
-  icon: 7,
-  marvel: 8,
-  dc: 9,
-  starwars: 10,
-  shadow: 11,
-  frozen: 12,
-  lava: 13,
-  slurp: 14,
-  gaminglegends: 15,
+  icon: 5,
+  marvel: 6,
+  dc: 7,
+  starwars: 8,
+  shadow: 9,
+  slurp: 10,
+  frozen: 11,
+  lava: 12,
+  gaminglegends: 13,
+  mythic: 14,
 };
 
 let cosmeticsMapCache = null;
@@ -147,33 +139,6 @@ function normalizeId(value) {
 
 function normalizeText(value) {
   return String(value || "").trim().toLowerCase();
-}
-
-function normalizeRarity(value) {
-  const r = normalizeText(value);
-
-  if (RARITY_ORDER[r] != null) return r;
-  if (r.includes("legendary")) return "legendary";
-  if (r.includes("epic")) return "epic";
-  if (r.includes("rare")) return "rare";
-  if (r.includes("uncommon")) return "uncommon";
-  if (r.includes("common")) return "common";
-  if (r.includes("mythic")) return "mythic";
-  if (r.includes("icon")) return "icon";
-  if (r.includes("marvel")) return "marvel";
-  if (r.includes("dc")) return "dc";
-  if (r.includes("star")) return "starwars";
-  if (r.includes("shadow")) return "shadow";
-  if (r.includes("frozen")) return "frozen";
-  if (r.includes("lava")) return "lava";
-  if (r.includes("slurp")) return "slurp";
-  if (r.includes("gaming")) return "gaminglegends";
-
-  return "common";
-}
-
-function rarityRank(value) {
-  return RARITY_ORDER[normalizeRarity(value)] ?? 999;
 }
 
 async function getCosmeticsMap() {
@@ -197,7 +162,6 @@ async function getCosmeticsMap() {
 
   cosmeticsMapCache = map;
   cosmeticsMapFetchedAt = now;
-
   return map;
 }
 
@@ -249,26 +213,24 @@ function getCategoryFromApiCosmetic(cosmetic) {
   return null;
 }
 
-function getCategoryFromPrefix(prefix = "") {
+function getCategoryFromPrefix(prefix, idPart = "") {
   if (PREFIX_TO_CATEGORY[prefix]) return PREFIX_TO_CATEGORY[prefix];
 
-  const lower = normalizeText(prefix);
+  const p = String(prefix || "").toLowerCase();
+  const id = String(idPart || "").toLowerCase();
 
-  if (lower.includes("banner")) return "banners";
-  if (lower.includes("emoticon") || lower.includes("emoji")) return "emoticons";
-  if (lower.includes("spray")) return "sprays";
-  if (lower.includes("song")) return "jam_tracks";
-
-  if (
-    lower.includes("guitar") ||
-    lower.includes("bass") ||
-    lower.includes("drum") ||
-    lower.includes("microphone") ||
-    lower.includes("keyboard") ||
-    lower.includes("keytar")
-  ) {
+  if (p.includes("banner") || id.includes("banner")) return "banners";
+  if (p.includes("emoji")) return "emoticons";
+  if (p.includes("spray")) return "sprays";
+  if (p.includes("music")) return "musics";
+  if (p.includes("shoe")) return "kicks";
+  if (p.includes("contrail") || p.includes("skydive")) return "contrails";
+  if (p.includes("loading")) return "loading_screens";
+  if (p.includes("toy")) return "toys";
+  if (p.includes("guitar") || p.includes("bass") || p.includes("drums") || p.includes("microphone") || p.includes("keytar") || p.includes("keyboard")) {
     return "jam_instruments";
   }
+  if (p.includes("song") || p.includes("track")) return "jam_tracks";
 
   return null;
 }
@@ -359,9 +321,16 @@ function buildSnapshotForStats(itemsWithPrefix) {
   return { cosmetics };
 }
 
+function raritySortValue(rarity) {
+  const key = normalizeText(rarity).replace(/\s+/g, "");
+  return Object.prototype.hasOwnProperty.call(RARITY_ORDER, key)
+    ? RARITY_ORDER[key]
+    : 999;
+}
+
 function sortResolvedItems(items) {
   return [...items].sort((a, b) => {
-    const rarityDiff = rarityRank(a?.rarity) - rarityRank(b?.rarity);
+    const rarityDiff = raritySortValue(a?.rarity) - raritySortValue(b?.rarity);
     if (rarityDiff !== 0) return rarityDiff;
 
     const aName = String(a?.name || a?.id || "").toLowerCase();
@@ -381,9 +350,10 @@ async function resolveCategories(itemsWithPrefix) {
 
     const categoryKey =
       getCategoryFromApiCosmetic(cosmetic) ||
-      getCategoryFromPrefix(item.prefix);
+      getCategoryFromPrefix(item.prefix, item.idPart);
 
     if (!categoryKey) continue;
+    if (!resolved[categoryKey]) resolved[categoryKey] = [];
 
     resolved[categoryKey].push({
       id: cosmetic?.id || item.idPart,
