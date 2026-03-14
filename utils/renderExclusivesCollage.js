@@ -136,7 +136,7 @@ function makeTextSvg({
           fill: ${color};
           font-size: ${fontSize}px;
           font-weight: ${weight};
-          font-family: DejaVu Sans, Arial, sans-serif;
+          font-family: Arial, Helvetica, sans-serif;
         }
       </style>
       <text x="${x}" y="${Math.floor(height * 0.8)}" text-anchor="${anchor}">${safeText}</text>
@@ -147,7 +147,7 @@ function makeTextSvg({
 async function renderExclusivesCollage({ username, categoryTitle, title, items }) {
   const resolvedTitle = String(categoryTitle || title || "Exclusives");
   const resolvedUsername = String(username || "Unknown");
-  const safe = (items || []).filter(Boolean).slice(0, 2000);
+  const safe = (items || []).filter((i) => i && i.iconUrl).slice(0, 2000);
 
   const ICON = 92;
   const TEXT_H = 24;
@@ -221,7 +221,6 @@ async function renderExclusivesCollage({ username, categoryTitle, title, items }
 
   const iconBuffers = await Promise.all(
     safe.map(async (it) => {
-      if (!it?.iconUrl) return null;
       try {
         return await fetchBuffer(it.iconUrl);
       } catch {
