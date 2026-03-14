@@ -21,7 +21,13 @@ let cosmeticIndexAt = 0;
 const COSMETIC_CACHE_MS = 1000 * 60 * 60 * 6;
 
 function normalizeText(value) {
-  return String(value || "").toLowerCase().trim();
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[()]/g, " ")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function extractItemsWithPrefix(lockerData) {
@@ -62,16 +68,25 @@ async function getCosmeticIndex() {
     return cosmeticIndex;
   }
 
-  const res = await axios.get("https://fortnite-api.com/v2/cosmetics/br", {
-    timeout: 30000,
-  });
+  const endpoints = [
+    "https://fortnite-api.com/v2/cosmetics",
+    "https://fortnite-api.com/v2/cosmetics/br",
+  ];
 
-  const data = Array.isArray(res.data?.data) ? res.data.data : [];
   const map = new Map();
 
-  for (const cosmetic of data) {
-    if (!cosmetic?.id) continue;
-    map.set(normalizeId(cosmetic.id), cosmetic);
+  for (const endpoint of endpoints) {
+    try {
+      const res = await axios.get(endpoint, { timeout: 45000 });
+      const data = Array.isArray(res.data?.data) ? res.data.data : [];
+
+      for (const cosmetic of data) {
+        if (!cosmetic?.id) continue;
+        map.set(normalizeId(cosmetic.id), cosmetic);
+      }
+    } catch (error) {
+      console.error(`Failed to load cosmetics from ${endpoint}:`, error.message);
+    }
   }
 
   cosmeticIndex = map;
@@ -80,12 +95,16 @@ async function getCosmeticIndex() {
   return cosmeticIndex;
 }
 
-function getIconUrl(cosmetic) {
+function getIconUrl(cosmetic, lockerItem = null) {
   return (
     cosmetic?.images?.smallIcon ||
     cosmetic?.images?.icon ||
     cosmetic?.images?.featured ||
     cosmetic?.images?.small ||
+    lockerItem?.attributes?.smallIcon ||
+    lockerItem?.attributes?.icon ||
+    lockerItem?.attributes?.featuredIcon ||
+    lockerItem?.attributes?.displayAssetPath ||
     null
   );
 }
@@ -134,19 +153,23 @@ function getVariantBlob(lockerItem) {
   return normalizeText(textParts.join(" "));
 }
 
+function splitKeywords(styleText) {
+  return normalizeText(styleText)
+    .replace(/-/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
 function styleMatcherHit(lockerItem, cosmetic, matcher) {
   if (!cosmetic?.name) return false;
-  if (normalizeText(cosmetic.name) !== normalizeText(matcher.cosmeticName)) return false;
+  if (normalizeText(cosmetic.name) !== normalizeText(matcher.cosmeticName)) {
+    return false;
+  }
 
   const blob = getVariantBlob(lockerItem);
   if (!blob) return false;
 
-  const keywords = normalizeText(matcher.styleText)
-    .replace(/[()]/g, " ")
-    .replace(/&/g, " ")
-    .split(/\s+/)
-    .filter(Boolean);
-
+  const keywords = splitKeywords(matcher.styleText);
   if (!keywords.length) return false;
 
   return keywords.every((word) => blob.includes(word));
@@ -174,28 +197,16 @@ function getCategoryOrderIndex(category) {
     "backblings",
     "pickaxes",
     "gliders",
+    "wraps",
     "emotes",
     "sprays",
     "emoticons",
-    "wraps",
-    "loadingScreens",
-    "contrails",
     "musicPacks",
-    "toys",
-    "kicks",
-    "sidekicks",
-    "jamTracks",
-    "jamInstruments",
-    "carBodies",
-    "carWheels",
-    "carBoosts",
-    "carDriftSmokes",
-    "legoBuildingSets",
-    "legoBuildingProps",
-    "rocketRacing",
-    "festival",
+    "loadingScreens",
     "banners",
-    "lego",
+    "contrails",
+    "kicks",
+    "instruments",
     "other",
   ];
 
@@ -206,7 +217,7 @@ function getCategoryOrderIndex(category) {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("lockerexclusives")
-    .setDescription("Generate an image of all exclusives from your locker"),
+    .setDescription("Generate an image of all exclusive + unique cosmetics from your locker"),
 
   async execute(interaction) {
     await interaction.deferReply();
@@ -279,44 +290,47 @@ module.exports = {
       const itemId = normalizeId(lockerItem.idPart);
       const cosmetic = cosmeticsById.get(itemId);
 
-      if (fullExclusiveIdSet.has(itemId) && cosmetic) {
+      if (fullExclusiveIdSet.has(itemId)) {
         const key = `id:${itemId}`;
         if (!seen.has(key)) {
           seen.add(key);
 
           matched.push({
-            id: cosmetic.id,
-            name: cosmetic.name || lockerItem.idPart,
-            iconUrl: getIconUrl(cosmetic),
+            id: cosmetic?.id || lockerItem.idPart,
+            name: cosmetic?.name || lockerItem.idPart,
+            iconUrl: getIconUrl(cosmetic, lockerItem),
             rarity: getRarity(cosmetic),
             category: directExclusiveMap.get(itemId) || "other",
-            sortName: normalizeText(cosmetic.name || lockerItem.idPart),
+            sortName: normalizeText(cosmetic?.name || lockerItem.idPart),
           });
         }
       }
 
-      if (cosmetic) {
-        for (const matcher of ALL_EXCLUSIVE_STYLES) {
-          if (!styleMatcherHit(lockerItem, cosmetic, matcher)) continue;
+      if (!cosmetic) continue;
 
-          const key = `style:${normalizeText(cosmetic.name)}:${normalizeText(matcher.styleText)}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
+      for (const matcher of ALL_EXCLUSIVE_STYLES) {
+        if (!styleMatcherHit(lockerItem, cosmetic, matcher)) continue;
 
-          matched.push({
-            id: `${cosmetic.id}::${matcher.styleText}`,
-            name: buildStyleDisplayName(cosmetic.name, matcher.styleText),
-            iconUrl: getIconUrl(cosmetic),
-            rarity: getRarity(cosmetic),
-            category: matcher.category || "other",
-            sortName: normalizeText(cosmetic.name),
-          });
-        }
+        const key = `style:${normalizeText(cosmetic.name)}:${normalizeText(
+          matcher.styleText
+        )}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        matched.push({
+          id: `${cosmetic.id}::${matcher.styleText}`,
+          name: buildStyleDisplayName(cosmetic.name, matcher.styleText),
+          iconUrl: getIconUrl(cosmetic, lockerItem),
+          rarity: getRarity(cosmetic),
+          category: matcher.category || "other",
+          sortName: normalizeText(cosmetic.name),
+        });
       }
     }
 
     matched.sort((a, b) => {
-      const catDiff = getCategoryOrderIndex(a.category) - getCategoryOrderIndex(b.category);
+      const catDiff =
+        getCategoryOrderIndex(a.category) - getCategoryOrderIndex(b.category);
       if (catDiff !== 0) return catDiff;
       return a.sortName.localeCompare(b.sortName);
     });
@@ -326,9 +340,9 @@ module.exports = {
     if (!renderable.length) {
       const embed = new EmbedBuilder()
         .setColor(0xffcc00)
-        .setTitle("No exclusives found")
+        .setTitle("No exclusive + unique cosmetics found")
         .setDescription(
-          "No cosmetics from the full exclusives list were detected in this locker."
+          "No cosmetics from the current Exclusive + Uniques list were detected in this locker."
         );
 
       return interaction.editReply({ embeds: [embed] });
@@ -336,18 +350,18 @@ module.exports = {
 
     const buffer = await renderExclusivesCollage({
       username: interaction.user.username,
-      categoryTitle: "Exclusives",
+      categoryTitle: "Exclusive + Uniques",
       items: renderable,
     });
 
     const attachment = new AttachmentBuilder(buffer, {
-      name: "locker-exclusives.png",
+      name: "locker-exclusive-uniques.png",
     });
 
     const embed = new EmbedBuilder()
       .setColor(0x5865f2)
-      .setTitle(`Exclusives (${renderable.length})`)
-      .setImage("attachment://locker-exclusives.png");
+      .setTitle(`Exclusive + Uniques (${renderable.length})`)
+      .setImage("attachment://locker-exclusive-uniques.png");
 
     return interaction.editReply({
       embeds: [embed],
