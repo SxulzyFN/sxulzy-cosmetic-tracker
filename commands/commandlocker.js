@@ -11,9 +11,6 @@ const axios = require("axios");
 const { getLocker, refreshAccessToken } = require("../epic");
 const { getTokens, saveTokens, saveUserLockerSnapshot } = require("../storage");
 
-// --------------------
-// Exact user-requested order
-// --------------------
 const CATEGORY_ORDER = [
   { key: "outfits", label: "Outfits" },
   { key: "backblings", label: "Back Blings" },
@@ -40,9 +37,6 @@ const CATEGORY_ORDER = [
   { key: "lego_building_props", label: "LEGO® Building Props" },
 ];
 
-// --------------------
-// Fallback mapping from locker template prefix
-// --------------------
 const PREFIX_TO_CATEGORY = {
   AthenaCharacter: "outfits",
   AthenaBackpack: "backblings",
@@ -50,7 +44,9 @@ const PREFIX_TO_CATEGORY = {
   AthenaGlider: "gliders",
   AthenaDance: "emotes",
   AthenaEmoji: "emoticons",
+  AthenaEmoticon: "emoticons",
   AthenaSpray: "sprays",
+  AthenaSprayDecal: "sprays",
   AthenaItemWrap: "wraps",
   CosmeticShoes: "kicks",
   AthenaPet: "sidekicks",
@@ -59,9 +55,11 @@ const PREFIX_TO_CATEGORY = {
   AthenaLoadingScreen: "loading_screens",
   AthenaMusicPack: "musics",
   AthenaToy: "toys",
+
   HomebaseBannerIcon: "banners",
   HomebaseBannerColor: "banners",
   AthenaBanner: "banners",
+  AthenaBannerIcon: "banners",
 
   SparksSong: "jam_tracks",
   SparksMicrophone: "jam_instruments",
@@ -82,9 +80,6 @@ const PREFIX_TO_CATEGORY = {
   JunoBuildingProp: "lego_building_props",
 };
 
-// --------------------
-// Primary mapping from Fortnite API cosmetic type
-// --------------------
 const API_TYPE_TO_CATEGORY = {
   outfit: "outfits",
   backpack: "backblings",
@@ -92,13 +87,16 @@ const API_TYPE_TO_CATEGORY = {
   glider: "gliders",
   emote: "emotes",
   emoji: "emoticons",
+  emoticon: "emoticons",
   spray: "sprays",
   wrap: "wraps",
   shoes: "kicks",
   pet: "sidekicks",
   contrail: "contrails",
   "loading screen": "loading_screens",
+  loadingscreen: "loading_screens",
   music: "musics",
+  "music pack": "musics",
   toy: "toys",
   banner: "banners",
   "banner icon": "banners",
@@ -108,6 +106,7 @@ const API_TYPE_TO_CATEGORY = {
   bass: "jam_instruments",
   drums: "jam_instruments",
   microphone: "jam_instruments",
+  mic: "jam_instruments",
   keytar: "jam_instruments",
   keyboard: "jam_instruments",
 
@@ -121,12 +120,22 @@ const API_TYPE_TO_CATEGORY = {
 };
 
 const RARITY_ORDER = {
-  legendary: 5,
-  epic: 4,
-  rare: 3,
-  uncommon: 2,
-  common: 1,
-  unknown: 0,
+  legendary: 0,
+  epic: 1,
+  rare: 2,
+  uncommon: 3,
+  common: 4,
+  mythic: 5,
+  exotic: 6,
+  icon: 7,
+  marvel: 8,
+  dc: 9,
+  starwars: 10,
+  shadow: 11,
+  frozen: 12,
+  lava: 13,
+  slurp: 14,
+  gaminglegends: 15,
 };
 
 let cosmeticsMapCache = null;
@@ -142,15 +151,29 @@ function normalizeText(value) {
 }
 
 function normalizeRarity(value) {
-  const rarity = normalizeText(value);
+  const r = normalizeText(value);
+  if (RARITY_ORDER[r] != null) return r;
+  if (r.includes("legendary")) return "legendary";
+  if (r.includes("epic")) return "epic";
+  if (r.includes("rare")) return "rare";
+  if (r.includes("uncommon")) return "uncommon";
+  if (r.includes("common")) return "common";
+  if (r.includes("mythic")) return "mythic";
+  if (r.includes("icon")) return "icon";
+  if (r.includes("marvel")) return "marvel";
+  if (r.includes("dc")) return "dc";
+  if (r.includes("star")) return "starwars";
+  if (r.includes("shadow")) return "shadow";
+  if (r.includes("frozen")) return "frozen";
+  if (r.includes("lava")) return "lava";
+  if (r.includes("slurp")) return "slurp";
+  if (r.includes("gaming")) return "gaminglegends";
+  return "common";
+}
 
-  if (rarity.includes("legendary")) return "legendary";
-  if (rarity.includes("epic")) return "epic";
-  if (rarity.includes("rare")) return "rare";
-  if (rarity.includes("uncommon")) return "uncommon";
-  if (rarity.includes("common")) return "common";
-
-  return "unknown";
+function rarityRank(value) {
+  const key = normalizeRarity(value);
+  return RARITY_ORDER[key] ?? 999;
 }
 
 async function getCosmeticsMap() {
@@ -160,8 +183,7 @@ async function getCosmeticsMap() {
     return cosmeticsMapCache;
   }
 
-  // Use full cosmetics endpoint so banner and non-BR style items resolve more reliably
-  const res = await axios.get("https://fortnite-api.com/v2/cosmetics", {
+  const res = await axios.get("https://fortnite-api.com/v2/cosmetics/br", {
     timeout: 30000,
   });
 
@@ -221,6 +243,29 @@ function getCategoryFromApiCosmetic(cosmetic) {
         .replace(/_/g, " ");
       if (API_TYPE_TO_CATEGORY[raw]) return API_TYPE_TO_CATEGORY[raw];
     }
+  }
+
+  return null;
+}
+
+function getCategoryFromPrefix(prefix = "") {
+  if (PREFIX_TO_CATEGORY[prefix]) return PREFIX_TO_CATEGORY[prefix];
+
+  const lower = normalizeText(prefix);
+
+  if (lower.includes("banner")) return "banners";
+  if (lower.includes("emoji") || lower.includes("emoticon")) return "emoticons";
+  if (lower.includes("spray")) return "sprays";
+  if (lower.includes("song")) return "jam_tracks";
+  if (
+    lower.includes("guitar") ||
+    lower.includes("bass") ||
+    lower.includes("drum") ||
+    lower.includes("microphone") ||
+    lower.includes("keyboard") ||
+    lower.includes("keytar")
+  ) {
+    return "jam_instruments";
   }
 
   return null;
@@ -312,14 +357,10 @@ function buildSnapshotForStats(itemsWithPrefix) {
   return { cosmetics };
 }
 
-function sortResolvedItemsByRarityThenAlphabetically(items) {
+function sortResolvedItems(items) {
   return [...items].sort((a, b) => {
-    const aRarity = RARITY_ORDER[normalizeRarity(a?.rarity)];
-    const bRarity = RARITY_ORDER[normalizeRarity(b?.rarity)];
-
-    if (aRarity !== bRarity) {
-      return bRarity - aRarity;
-    }
+    const rarityDiff = rarityRank(a?.rarity) - rarityRank(b?.rarity);
+    if (rarityDiff !== 0) return rarityDiff;
 
     const aName = String(a?.name || a?.id || "").toLowerCase();
     const bName = String(b?.name || b?.id || "").toLowerCase();
@@ -336,9 +377,9 @@ async function resolveCategories(itemsWithPrefix) {
   for (const item of itemsWithPrefix) {
     const cosmetic = cosmeticsMap.get(normalizeId(item.idPart));
 
-    const categoryKey =
+    let categoryKey =
       getCategoryFromApiCosmetic(cosmetic) ||
-      PREFIX_TO_CATEGORY[item.prefix] ||
+      getCategoryFromPrefix(item.prefix) ||
       null;
 
     if (!categoryKey) continue;
@@ -358,7 +399,7 @@ async function resolveCategories(itemsWithPrefix) {
   }
 
   for (const key of Object.keys(resolved)) {
-    resolved[key] = sortResolvedItemsByRarityThenAlphabetically(resolved[key]);
+    resolved[key] = sortResolvedItems(resolved[key]);
   }
 
   return resolved;
