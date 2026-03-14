@@ -60,6 +60,8 @@ const PREFIX_TO_CATEGORY = {
   AthenaMusicPack: "musics",
   AthenaToy: "toys",
   HomebaseBannerIcon: "banners",
+  HomebaseBannerColor: "banners",
+  AthenaBanner: "banners",
 
   SparksSong: "jam_tracks",
   SparksMicrophone: "jam_instruments",
@@ -118,6 +120,15 @@ const API_TYPE_TO_CATEGORY = {
   "lego decor": "lego_building_props",
 };
 
+const RARITY_ORDER = {
+  legendary: 5,
+  epic: 4,
+  rare: 3,
+  uncommon: 2,
+  common: 1,
+  unknown: 0,
+};
+
 let cosmeticsMapCache = null;
 let cosmeticsMapFetchedAt = 0;
 const COSMETICS_CACHE_MS = 1000 * 60 * 60 * 6;
@@ -130,6 +141,18 @@ function normalizeText(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function normalizeRarity(value) {
+  const rarity = normalizeText(value);
+
+  if (rarity.includes("legendary")) return "legendary";
+  if (rarity.includes("epic")) return "epic";
+  if (rarity.includes("rare")) return "rare";
+  if (rarity.includes("uncommon")) return "uncommon";
+  if (rarity.includes("common")) return "common";
+
+  return "unknown";
+}
+
 async function getCosmeticsMap() {
   const now = Date.now();
 
@@ -137,7 +160,8 @@ async function getCosmeticsMap() {
     return cosmeticsMapCache;
   }
 
-  const res = await axios.get("https://fortnite-api.com/v2/cosmetics/br", {
+  // Use full cosmetics endpoint so banner and non-BR style items resolve more reliably
+  const res = await axios.get("https://fortnite-api.com/v2/cosmetics", {
     timeout: 30000,
   });
 
@@ -288,8 +312,15 @@ function buildSnapshotForStats(itemsWithPrefix) {
   return { cosmetics };
 }
 
-function sortResolvedItemsAlphabetically(items) {
+function sortResolvedItemsByRarityThenAlphabetically(items) {
   return [...items].sort((a, b) => {
+    const aRarity = RARITY_ORDER[normalizeRarity(a?.rarity)];
+    const bRarity = RARITY_ORDER[normalizeRarity(b?.rarity)];
+
+    if (aRarity !== bRarity) {
+      return bRarity - aRarity;
+    }
+
     const aName = String(a?.name || a?.id || "").toLowerCase();
     const bName = String(b?.name || b?.id || "").toLowerCase();
     return aName.localeCompare(bName);
@@ -305,7 +336,7 @@ async function resolveCategories(itemsWithPrefix) {
   for (const item of itemsWithPrefix) {
     const cosmetic = cosmeticsMap.get(normalizeId(item.idPart));
 
-    let categoryKey =
+    const categoryKey =
       getCategoryFromApiCosmetic(cosmetic) ||
       PREFIX_TO_CATEGORY[item.prefix] ||
       null;
@@ -327,7 +358,7 @@ async function resolveCategories(itemsWithPrefix) {
   }
 
   for (const key of Object.keys(resolved)) {
-    resolved[key] = sortResolvedItemsAlphabetically(resolved[key]);
+    resolved[key] = sortResolvedItemsByRarityThenAlphabetically(resolved[key]);
   }
 
   return resolved;
