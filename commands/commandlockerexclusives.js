@@ -45,6 +45,7 @@ function normalizeText(value) {
 
 function normalizeRarity(value) {
   const r = normalizeText(value);
+
   if (RARITY_ORDER[r] != null) return r;
   if (r.includes("legendary")) return "legendary";
   if (r.includes("epic")) return "epic";
@@ -61,6 +62,7 @@ function normalizeRarity(value) {
   if (r.includes("lava")) return "lava";
   if (r.includes("slurp")) return "slurp";
   if (r.includes("gaming")) return "gaminglegends";
+
   return "common";
 }
 
@@ -216,29 +218,6 @@ function buildDirectExclusiveMap() {
   return directMap;
 }
 
-function getCategoryOrderIndex(category) {
-  const order = [
-    "skins",
-    "backblings",
-    "pickaxes",
-    "gliders",
-    "wraps",
-    "emotes",
-    "sprays",
-    "emoticons",
-    "musicPacks",
-    "loadingScreens",
-    "banners",
-    "contrails",
-    "kicks",
-    "jam_instruments",
-    "other",
-  ];
-
-  const idx = order.indexOf(category);
-  return idx === -1 ? 999 : idx;
-}
-
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("lockerexclusives")
@@ -355,10 +334,7 @@ module.exports = {
       const rarityDiff = rarityRank(a.rarity) - rarityRank(b.rarity);
       if (rarityDiff !== 0) return rarityDiff;
 
-      const nameDiff = String(a.sortName || "").localeCompare(String(b.sortName || ""));
-      if (nameDiff !== 0) return nameDiff;
-
-      return getCategoryOrderIndex(a.category) - getCategoryOrderIndex(b.category);
+      return String(a.sortName || "").localeCompare(String(b.sortName || ""));
     });
 
     if (!matched.length) {
