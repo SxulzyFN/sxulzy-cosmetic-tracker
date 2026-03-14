@@ -16,33 +16,56 @@ const {
   normalizeId,
 } = require("../utils/allExclusives");
 
+const RARITY_ORDER = {
+  legendary: 0,
+  epic: 1,
+  rare: 2,
+  uncommon: 3,
+  common: 4,
+  mythic: 5,
+  exotic: 6,
+  icon: 7,
+  marvel: 8,
+  dc: 9,
+  starwars: 10,
+  shadow: 11,
+  frozen: 12,
+  lava: 13,
+  slurp: 14,
+  gaminglegends: 15,
+};
+
 let cosmeticIndex = null;
 let cosmeticIndexAt = 0;
 const COSMETIC_CACHE_MS = 1000 * 60 * 60 * 6;
-
-const RARITY_ORDER = {
-  legendary: 5,
-  epic: 4,
-  rare: 3,
-  uncommon: 2,
-  common: 1,
-  unknown: 0,
-};
 
 function normalizeText(value) {
   return String(value || "").toLowerCase().trim();
 }
 
 function normalizeRarity(value) {
-  const rarity = normalizeText(value);
+  const r = normalizeText(value);
+  if (RARITY_ORDER[r] != null) return r;
+  if (r.includes("legendary")) return "legendary";
+  if (r.includes("epic")) return "epic";
+  if (r.includes("rare")) return "rare";
+  if (r.includes("uncommon")) return "uncommon";
+  if (r.includes("common")) return "common";
+  if (r.includes("mythic")) return "mythic";
+  if (r.includes("icon")) return "icon";
+  if (r.includes("marvel")) return "marvel";
+  if (r.includes("dc")) return "dc";
+  if (r.includes("star")) return "starwars";
+  if (r.includes("shadow")) return "shadow";
+  if (r.includes("frozen")) return "frozen";
+  if (r.includes("lava")) return "lava";
+  if (r.includes("slurp")) return "slurp";
+  if (r.includes("gaming")) return "gaminglegends";
+  return "common";
+}
 
-  if (rarity.includes("legendary")) return "legendary";
-  if (rarity.includes("epic")) return "epic";
-  if (rarity.includes("rare")) return "rare";
-  if (rarity.includes("uncommon")) return "uncommon";
-  if (rarity.includes("common")) return "common";
-
-  return "unknown";
+function rarityRank(value) {
+  return RARITY_ORDER[normalizeRarity(value)] ?? 999;
 }
 
 function extractItemsWithPrefix(lockerData) {
@@ -83,7 +106,7 @@ async function getCosmeticIndex() {
     return cosmeticIndex;
   }
 
-  const res = await axios.get("https://fortnite-api.com/v2/cosmetics", {
+  const res = await axios.get("https://fortnite-api.com/v2/cosmetics/br", {
     timeout: 30000,
   });
 
@@ -208,7 +231,7 @@ function getCategoryOrderIndex(category) {
     "banners",
     "contrails",
     "kicks",
-    "festival",
+    "jam_instruments",
     "other",
   ];
 
@@ -301,7 +324,7 @@ module.exports = {
             id: cosmetic?.id || lockerItem.idPart,
             name: cosmetic?.name || lockerItem.idPart,
             iconUrl: getIconUrl(cosmetic),
-            rarity: getRarity(cosmetic),
+            rarity: cosmetic ? getRarity(cosmetic) : "common",
             category: directExclusiveMap.get(itemId) || "other",
             sortName: normalizeText(cosmetic?.name || lockerItem.idPart),
           });
@@ -329,23 +352,16 @@ module.exports = {
     }
 
     matched.sort((a, b) => {
-      const catDiff = getCategoryOrderIndex(a.category) - getCategoryOrderIndex(b.category);
-      if (catDiff !== 0) return catDiff;
+      const rarityDiff = rarityRank(a.rarity) - rarityRank(b.rarity);
+      if (rarityDiff !== 0) return rarityDiff;
 
-      const aRarity = RARITY_ORDER[normalizeRarity(a?.rarity)];
-      const bRarity = RARITY_ORDER[normalizeRarity(b?.rarity)];
-      if (aRarity !== bRarity) return bRarity - aRarity;
+      const nameDiff = String(a.sortName || "").localeCompare(String(b.sortName || ""));
+      if (nameDiff !== 0) return nameDiff;
 
-      return String(a.sortName || a.name || "").localeCompare(
-        String(b.sortName || b.name || ""),
-        undefined,
-        { sensitivity: "base" }
-      );
+      return getCategoryOrderIndex(a.category) - getCategoryOrderIndex(b.category);
     });
 
-    const renderable = matched.filter((x) => x.iconUrl);
-
-    if (!renderable.length) {
+    if (!matched.length) {
       const embed = new EmbedBuilder()
         .setColor(0xffcc00)
         .setTitle("No exclusive + unique cosmetics found")
@@ -359,7 +375,7 @@ module.exports = {
     const buffer = await renderExclusivesCollage({
       username: interaction.user.username,
       categoryTitle: "Exclusive + Uniques",
-      items: renderable,
+      items: matched,
     });
 
     const attachment = new AttachmentBuilder(buffer, {
@@ -368,7 +384,7 @@ module.exports = {
 
     const embed = new EmbedBuilder()
       .setColor(0x5865f2)
-      .setTitle(`Exclusive + Uniques (${renderable.length})`)
+      .setTitle(`Exclusive + Uniques (${matched.length})`)
       .setImage("attachment://locker-exclusive-uniques.png");
 
     return interaction.editReply({
