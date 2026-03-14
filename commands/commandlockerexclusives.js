@@ -7,7 +7,7 @@ const {
 const axios = require("axios");
 
 const { getLocker, refreshAccessToken } = require("../epic");
-const { getTokens, saveTokens } = require("../storage");
+const { getTokens, saveTokens } = require("../utils/storage");
 const { renderExclusivesCollage } = require("../utils/renderExclusivesCollage");
 const {
   ALL_EXCLUSIVE_ITEMS,
