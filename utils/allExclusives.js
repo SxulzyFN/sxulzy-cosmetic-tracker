@@ -952,7 +952,7 @@ const ALL_EXCLUSIVE_ITEMS = {
     "Shoes_BlossomFoot",
   ]),
 
-  jam_instruments: uniq([
+  festival: uniq([
     "Sparks_AsterOrder_Guitar",
     "Sparks_AsterOrder_Mic",
     "Sparks_Drum_FrogCabinet",
