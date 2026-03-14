@@ -11,8 +11,8 @@ const {
   ButtonStyle,
 } = require("discord.js");
 
-const { saveTokens } = require("../storage");
-const { getAccessToken } = require("../epic");
+const { saveTokens } = require("../utils/storage");
+const { getAccessToken } = require("../services/epic");
 const { renderLockerCollage } = require("../utils/renderLockerCollage");
 
 const PAGE_SIZE = 8;
