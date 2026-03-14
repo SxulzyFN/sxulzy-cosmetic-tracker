@@ -8,8 +8,8 @@ const {
 } = require("discord.js");
 const axios = require("axios");
 
-const { getLocker, refreshAccessToken } = require("../epic");
-const { getTokens, saveTokens, saveUserLockerSnapshot } = require("../storage");
+const { getLocker, refreshAccessToken } = require("../services/epic");
+const { getTokens, saveTokens, saveUserLockerSnapshot } = require("../utils/storage");
 
 // --------------------
 // Exact user-requested order
