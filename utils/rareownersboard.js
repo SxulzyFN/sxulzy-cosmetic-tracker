@@ -1,6 +1,6 @@
 // utils/rareownersboard.js
 
-const { getAllLockerSnapshots } = require("../storage");
+const { getAllLockerSnapshots } = require("../utils/storage");
 const {
   getRoleEntries,
   snapshotOwnsEntry,
